@@ -181,10 +181,12 @@ public:
     Printf(f_runtime, "# define SWIGRUST_THREAD_LOCAL\n");
     Printf(f_runtime, "#endif\n\n");
     Printf(f_runtime, "static char *SWIG_RustStringCopy(const char *s) {\n");
+    Printf(f_runtime, "  size_t len;\n");
+    Printf(f_runtime, "  char *copy;\n");
     Printf(f_runtime, "  if (!s)\n");
     Printf(f_runtime, "    return 0;\n");
-    Printf(f_runtime, "  size_t len = strlen(s) + 1;\n");
-    Printf(f_runtime, "  char *copy = (char *)malloc(len);\n");
+    Printf(f_runtime, "  len = strlen(s) + 1;\n");
+    Printf(f_runtime, "  copy = (char *)malloc(len);\n");
     Printf(f_runtime, "  if (copy)\n");
     Printf(f_runtime, "    memcpy(copy, s, len);\n");
     Printf(f_runtime, "  return copy;\n");
