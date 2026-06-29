@@ -487,8 +487,8 @@ public:
       Printf(f->code, "%s\n", tm);
       emit_return_variable(n, returntype, f);
     } else {
-      Swig_warning(WARN_TYPEMAP_OUT_UNDEF, input_file, line_number, "Unable to use return type %s in function %s.\n", SwigType_str(returntype, 0),
-                   Getattr(n, "name"));
+      Swig_warning(
+        WARN_TYPEMAP_OUT_UNDEF, input_file, line_number, "Unable to use return type %s in function %s.\n", SwigType_str(returntype, 0), Getattr(n, "name"));
     }
     Printv(f->code, outarg, NIL);
     Printv(f->code, cleanup, NIL);
@@ -530,8 +530,7 @@ public:
     if (value && rustTypeIsPrimitive(type))
       Printf(f_rust, "pub const %s: %s = %s;\n", symname, rust_type, value);
     else
-      Swig_warning(WARN_LANG_NATIVE_UNIMPL, input_file, line_number, "Rust constant '%s' has unsupported type %s\n", symname,
-                   SwigType_str(type, 0));
+      Swig_warning(WARN_LANG_NATIVE_UNIMPL, input_file, line_number, "Rust constant '%s' has unsupported type %s\n", symname, SwigType_str(type, 0));
 
     Delete(rust_type);
     return SWIG_OK;
@@ -1516,15 +1515,8 @@ private:
     return body;
   }
 
-  void writeRustFunction(Node *n,
-                         String *rust_name,
-                         String *c_name,
-                         String *raw_return,
-                         String *rust_return,
-                         String *rust_im_params,
-                         String *rust_params,
-                         String *rust_pre_code,
-                         String *rust_args) {
+  void writeRustFunction(Node *n, String *rust_name, String *c_name, String *raw_return, String *rust_return, String *rust_im_params, String *rust_params,
+                         String *rust_pre_code, String *rust_args) {
     Printf(rust_extern_code, "  #[link_name = \"%s\"]\n", c_name);
     Printf(rust_extern_code, "  pub fn %s_raw(%s)", rust_name, rust_im_params);
     if (Cmp(raw_return, "()") != 0)
@@ -1547,11 +1539,10 @@ private:
   bool rustTypeIsPrimitive(SwigType *t) {
     SwigType *resolved = SwigType_typedef_resolve_all(t);
     SwigType *stripped = SwigType_strip_qualifiers(resolved);
-    bool primitive = Cmp(stripped, "void") == 0 || Cmp(stripped, "bool") == 0 || Cmp(stripped, "char") == 0 ||
-                     Cmp(stripped, "signed char") == 0 || Cmp(stripped, "unsigned char") == 0 || Cmp(stripped, "short") == 0 ||
-                     Cmp(stripped, "unsigned short") == 0 || Cmp(stripped, "int") == 0 || Cmp(stripped, "unsigned int") == 0 ||
-                     Cmp(stripped, "long") == 0 || Cmp(stripped, "unsigned long") == 0 || Cmp(stripped, "long long") == 0 ||
-                     Cmp(stripped, "unsigned long long") == 0 || Cmp(stripped, "float") == 0 || Cmp(stripped, "double") == 0;
+    bool primitive = Cmp(stripped, "void") == 0 || Cmp(stripped, "bool") == 0 || Cmp(stripped, "char") == 0 || Cmp(stripped, "signed char") == 0 ||
+                     Cmp(stripped, "unsigned char") == 0 || Cmp(stripped, "short") == 0 || Cmp(stripped, "unsigned short") == 0 || Cmp(stripped, "int") == 0 ||
+                     Cmp(stripped, "unsigned int") == 0 || Cmp(stripped, "long") == 0 || Cmp(stripped, "unsigned long") == 0 ||
+                     Cmp(stripped, "long long") == 0 || Cmp(stripped, "unsigned long long") == 0 || Cmp(stripped, "float") == 0 || Cmp(stripped, "double") == 0;
     Delete(stripped);
     Delete(resolved);
     return primitive;
