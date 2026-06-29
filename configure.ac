@@ -768,6 +768,26 @@ AC_SUBST(CSHARPCFLAGS)
 AC_SUBST(CSHARPSO)
 
 #----------------------------------------------------------------
+# Look for Rust
+#----------------------------------------------------------------
+
+AC_ARG_WITH(rust, AS_HELP_STRING([--without-rust], [Disable Rust])
+AS_HELP_STRING([--with-rust=path], [Set location of Rust compiler]),[RUSTBIN="$withval"], [RUSTBIN="$alllang_default"])
+
+if test x"${RUSTBIN}" = xno; then
+  AC_MSG_NOTICE([Disabling Rust])
+  RUSTC=
+else
+  if test "x$RUSTBIN" = xyes; then
+    AC_CHECK_PROGS(RUSTC, rustc)
+  else
+    RUSTC="$RUSTBIN"
+  fi
+fi
+
+AC_SUBST(RUSTC)
+
+#----------------------------------------------------------------
 # Look for D
 #----------------------------------------------------------------
 
@@ -2772,6 +2792,12 @@ if test -z "$RUBY" || test -z "$RUBYINCLUDE" || test -z "$RUBYLIB" ; then
 fi
 AC_SUBST(SKIP_RUBY)
 
+SKIP_RUST=
+if test -z "$RUSTC" ; then
+    SKIP_RUST="1"
+fi
+AC_SUBST(SKIP_RUST)
+
 
 SKIP_SCILAB=
 if test -z "$SCILAB"; then
@@ -2874,6 +2900,7 @@ AC_CONFIG_FILES([
     Examples/test-suite/python/Makefile
     Examples/test-suite/r/Makefile
     Examples/test-suite/ruby/Makefile
+    Examples/test-suite/rust/Makefile
     Examples/test-suite/scilab/Makefile
     Examples/test-suite/tcl/Makefile
     Source/Makefile
@@ -2936,6 +2963,7 @@ test -n "$SKIP_PHP"		|| langs="${langs}php "
 test -n "$SKIP_PYTHON"		|| langs="${langs}python "
 test -n "$SKIP_R"		|| langs="${langs}r "
 test -n "$SKIP_RUBY"		|| langs="${langs}ruby "
+test -n "$SKIP_RUST"		|| langs="${langs}rust "
 test -n "$SKIP_SCILAB"		|| langs="${langs}scilab "
 test -n "$SKIP_TCL"		|| langs="${langs}tcl "
 

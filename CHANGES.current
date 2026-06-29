@@ -7,6 +7,28 @@ the issue number to the end of the URL: https://github.com/swig/swig/issues/
 Version 4.5.0 (in progress)
 ===========================
 
+2026-06-29: trittsv
+            [Rust] Add a Rust target language module based on the C# module
+            structure. The implementation generates raw Rust FFI declarations
+            and unsafe Rust wrapper functions for SWIG C ABI wrappers, opaque
+            proxy structs and proxy methods for wrapped classes, enum
+            declarations and director support for C++ virtual method callbacks,
+            together with documentation, Rust examples and initial Rust
+            test-suite integration.
+            Rust directors now use typemap-driven director marshalling based on
+            the C# director implementation, including directorin/directorout
+            typemaps, director argument output hooks, director callback metadata,
+            proxy ownership/disown support and a runtime director test.
+            Rust now also provides typemap-driven wrapper generation with
+            Rust-specific rusttype/rustin/rustout typemaps, pointer/reference
+            typemaps in typemaps.i and initial std_string.i, std_vector.i and
+            stl.i standard library files.
+            Rust STL support now includes std_except.i with C#-style throws
+            typemaps that translate caught C++ standard exceptions into Rust
+            panics via the generated pending-exception bridge. The Rust
+            test-suite is also enabled in Linux GitHub Actions, including
+            default, C++11 and C++14 builds.
+
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs
 	    0 vs 0L.

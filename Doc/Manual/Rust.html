@@ -1,0 +1,259 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>SWIG and Rust</title>
+<link rel="stylesheet" type="text/css" href="style.css">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+</head>
+<body bgcolor="#FFFFFF">
+<H1><a name="Rust">40 SWIG and Rust</a></H1>
+<!-- INDEX -->
+<div class="sectiontoc">
+<ul>
+<li><a href="#Rust_introduction">Introduction</a>
+<li><a href="#Rust_commandline">Additional command line options</a>
+<li><a href="#Rust_simple_example">Simple example</a>
+<li><a href="#Rust_directors">Directors</a>
+</ul>
+</div>
+<!-- INDEX -->
+
+
+
+<H2><a name="Rust_introduction">40.1 Introduction</a></H2>
+
+
+<p>
+The Rust module exposes a conservative FFI surface. It supports primitive scalar
+C types, strings and other pointer values as raw pointers, the wrapper functions
+produced by SWIG for variables, constants, constructors, destructors and member
+functions, enums, and opaque proxy structs for wrapped C++ classes. It generates
+the usual SWIG C or C++ wrapper source file and a Rust source file named after
+the SWIG module, for example <tt>example.rs</tt>. Each generated C wrapper is
+declared as a raw Rust FFI function with a <tt>_raw</tt> suffix and also exposed
+through an unsafe Rust wrapper function using the SWIG symbol name.
+</p>
+
+<p>
+The module also includes C++ director support modelled on the C#
+module. Directors allow a C++ virtual method call to dispatch back into Rust by
+registering Rust callback functions with the generated director object. The Rust
+module follows the C# module structure for wrapper naming, proxy method emission
+and director setup while mapping those constructs to Rust syntax.
+</p>
+
+<H2><a name="Rust_commandline">40.2 Additional command line options</a></H2>
+
+
+<p>
+The following option is available:
+</p>
+
+<div class="shell">
+<pre>
+-crate &lt;name&gt;  Set the Rust module/crate name used in generated comments
+</pre>
+</div>
+
+<H2><a name="Rust_simple_example">40.3 Simple example</a></H2>
+
+
+<p>
+Given a C source file:
+</p>
+
+<div class="code">
+<pre>
+int add(int a, int b) {
+  return a + b;
+}
+</pre>
+</div>
+
+<p>
+and the following SWIG interface:
+</p>
+
+<div class="code">
+<pre>
+%module example
+
+%{
+extern int add(int a, int b);
+%}
+
+extern int add(int a, int b);
+</pre>
+</div>
+
+<p>
+Run SWIG and build the shared library:
+</p>
+
+<div class="shell">
+<pre>
+$ swig -rust example.i
+$ cc -fPIC -c example.c example_wrap.c
+$ cc -shared example.o example_wrap.o -o libexample.so
+</pre>
+</div>
+
+<p>
+The generated <tt>example.rs</tt> can then be used from Rust:
+</p>
+
+<div class="targetlang">
+<pre>
+mod example;
+
+fn main() {
+    let result = unsafe { example::add(19, 23) };
+    assert_eq!(result, 42);
+}
+</pre>
+</div>
+
+<p>
+Compile and run the Rust program with the generated library on the library path:
+</p>
+
+<div class="shell">
+<pre>
+$ rustc runme.rs -L . -l dylib=example -o runme
+$ LD_LIBRARY_PATH=. ./runme
+</pre>
+</div>
+
+<p>
+The source tree also contains the same smoke test under
+<tt>Examples/rust/simple</tt>. After configuring and building SWIG with Rust
+enabled, run:
+</p>
+
+<div class="shell">
+<pre>
+$ make -C Examples/rust/simple check
+</pre>
+</div>
+
+<p>
+The Rust library follows the C# target's layering: core ABI and proxy typemaps
+are defined in <tt>rust.swg</tt>, pointer/reference convenience typemaps are in
+<tt>typemaps.i</tt>, and standard C++ library helpers are provided by
+<tt>std_except.i</tt>, <tt>std_string.i</tt>, <tt>std_vector.i</tt> and
+<tt>stl.i</tt>. C++ standard exceptions caught by <tt>std_except.i</tt> are
+reported to Rust as panics from the generated unsafe wrapper functions. The
+generated Rust code uses Rust-specific typemap names such as <tt>rusttype</tt>,
+<tt>rustin</tt>, <tt>rustout</tt>, <tt>rustvarin</tt>,
+<tt>rustvarout</tt>, <tt>rustdirectorin</tt> and
+<tt>rustdirectorout</tt>, corresponding to the role of C# typemaps such as
+<tt>cstype</tt>, <tt>csin</tt>, <tt>csout</tt>,
+<tt>csvarin</tt>, <tt>csvarout</tt>, <tt>csdirectorin</tt> and
+<tt>csdirectorout</tt>.
+</p>
+
+<p>
+The Rust test-suite can be run with <tt>make check-rust-test-suite</tt> after
+configuring SWIG with Rust enabled. The Linux GitHub Actions workflow also runs
+the Rust examples and test-suite for the default compiler mode, C++11 and C++14.
+</p>
+
+<H2><a name="Rust_directors">40.4 Directors</a></H2>
+
+
+<p>
+Director support is enabled in the same way as other director capable target
+languages. Use the <tt>directors</tt> module option and apply the
+<tt>director</tt> feature to the C++ class whose virtual methods should be
+overridden from Rust:
+</p>
+
+<div class="code">
+<pre>
+%module(directors="1") messages
+%feature("director") Receiver;
+
+%inline %{
+class Receiver {
+public:
+  Receiver() : last(0) {
+  }
+  virtual ~Receiver() {
+  }
+  virtual void message(int value) {
+    last = value;
+  }
+  int last;
+};
+
+inline void deliver(Receiver *receiver, int value) {
+  receiver-&gt;message(value);
+}
+%}
+</pre>
+</div>
+
+<p>
+For a class named <tt>Receiver</tt>, the generated Rust file contains an opaque
+<tt>Receiver</tt> proxy struct, callback type aliases such as
+<tt>ReceiverCallback0</tt>, a <tt>ReceiverDirector</tt> trait describing the
+callbacks, and a <tt>Receiver::connect_director</tt> method. The Rust callback
+receives the opaque Rust object pointer that was passed to
+<tt>connect_director</tt>.
+</p>
+
+<div class="targetlang">
+<pre>
+mod messages;
+
+use std::ffi::c_void;
+use std::os::raw::c_int;
+
+struct MyReceiver {
+    total: c_int,
+}
+
+impl messages::ReceiverDirector for MyReceiver {
+    unsafe fn message(&amp;mut self, value: c_int) {
+        self.total += value;
+    }
+}
+
+extern "C" fn receiver_message(obj: *mut c_void, value: c_int) {
+    unsafe {
+        (*(obj as *mut MyReceiver)).message(value);
+    }
+}
+
+fn main() {
+    unsafe {
+        let mut rust_receiver = MyReceiver { total: 0 };
+
+        let receiver = messages::Receiver::new();
+
+        receiver.connect_director(
+            &amp;mut rust_receiver as *mut MyReceiver as *mut c_void,
+            receiver_message,
+        );
+        messages::deliver(receiver.as_ptr(), 42);
+        assert_eq!(rust_receiver.total, 42);
+    }
+}
+</pre>
+</div>
+
+<p>
+The exact callback alias numbers follow the order of director methods emitted
+for the class. For example, the first director method in <tt>Receiver</tt> uses
+<tt>ReceiverCallback0</tt>. The generated C++ wrapper must be compiled as C++,
+and the generated Rust program must link against the shared wrapper library.
+Director method arguments and return values are marshalled through Rust
+<tt>ctype</tt>, <tt>directorin</tt>, <tt>directorout</tt> and
+<tt>directorargout</tt> typemaps, following the same director typemap structure
+used by the C# module. Constructed Rust proxy objects own their C++ object by
+default and release it from <tt>Drop</tt>; use <tt>disown()</tt> or
+<tt>into_raw()</tt> when the C++ side takes ownership.
+</p>
+
+</body>
+</html>

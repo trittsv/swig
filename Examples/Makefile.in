@@ -401,6 +401,61 @@ d_clean:
 	rm -f *.@OBJEXT@ *@SO@
 
 ##################################################################
+#####                       Rust                            ######
+##################################################################
+
+RUSTC = @RUSTC@
+RUST_RUNME = ./$(RUNME)
+
+# ----------------------------------------------------------------
+# Build a dynamically loadable Rust wrapper for a C module
+# ----------------------------------------------------------------
+
+rust: $(SRCDIR_SRCS)
+	$(SWIG) -rust $(SWIGOPT) -o $(ISRCS) $(INTERFACEPATH)
+	$(CC) -c $(CCSHARED) $(CPPFLAGS) $(CFLAGS) $(SRCDIR_SRCS) $(ISRCS) $(INCLUDES)
+	$(LDSHARED) $(CFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) -o lib$(TARGET)$(SO)
+
+# ----------------------------------------------------------------
+# Build a dynamically loadable Rust wrapper for a C++ module
+# ----------------------------------------------------------------
+
+rust_cpp: $(SRCDIR_SRCS)
+	$(SWIG) -rust -c++ $(SWIGOPT) -o $(ICXXSRCS) $(INTERFACEPATH)
+	$(CXX) -c $(CCSHARED) $(CPPFLAGS) $(CXXFLAGS) $(SRCDIR_SRCS) $(SRCDIR_CXXSRCS) $(ICXXSRCS) $(INCLUDES)
+	$(CXXSHARED) $(CXXFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) $(CPP_DLLIBS) -o lib$(TARGET)$(SO)
+
+# ----------------------------------------------------------------
+# Compile Rust files
+# ----------------------------------------------------------------
+
+rust_compile: $(SRCDIR)$(RUNME).rs
+	$(COMPILETOOL) $(RUSTC) $(RUSTFLAGS) $< -L . -l dylib=$(TARGET) -o $(RUNME)
+
+# -----------------------------------------------------------------
+# Run Rust example
+# -----------------------------------------------------------------
+
+rust_run:
+	env LD_LIBRARY_PATH=$$PWD DYLD_LIBRARY_PATH=$$PWD $(RUNTOOL) $(RUST_RUNME) $(RUNPIPE)
+
+# -----------------------------------------------------------------
+# Version display
+# -----------------------------------------------------------------
+
+rust_version:
+	$(RUSTC) --version
+
+# -----------------------------------------------------------------
+# Clean the Rust examples
+# -----------------------------------------------------------------
+
+rust_clean:
+	rm -f *_wrap* *~ .~* $(RUNME) `find . -name \*.rs | grep -v $(RUNME).rs`
+	rm -f core @EXTRA_CLEAN@
+	rm -f *.@OBJEXT@ *@SO@
+
+##################################################################
 #####                       Go                              ######
 ##################################################################
 

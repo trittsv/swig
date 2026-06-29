@@ -1,0 +1,93 @@
+#######################################################################
+# Makefile for Rust test-suite
+#######################################################################
+
+LANGUAGE     = rust
+SCRIPTSUFFIX = _runme.rs
+RUSTC        = @RUSTC@
+
+HAVE_CXX11   = @HAVE_CXX11@
+HAVE_CXX14   = @HAVE_CXX14@
+HAVE_CXX17   = @HAVE_CXX17@
+HAVE_CXX20   = @HAVE_CXX20@
+srcdir       = @srcdir@
+top_srcdir   = ../@top_srcdir@
+top_builddir = ../@top_builddir@
+
+RUST_C_TEST_CASES = \
+	global_functions \
+
+RUST_CPP_TEST_CASES = \
+	cpp_basic \
+	director_minimal \
+	enum_thorough \
+	rust_std_except \
+	rust_std_string \
+	rust_std_vector \
+
+ERROR_TEST_CASES = \
+	$(RUST_CPP_TEST_CASES:=.cpptest) \
+	$(RUST_C_TEST_CASES:=.ctest)
+
+include $(srcdir)/../common.mk
+
+C_TEST_CASES := $(RUST_C_TEST_CASES)
+CPP_TEST_CASES := $(RUST_CPP_TEST_CASES)
+CPP11_TEST_CASES :=
+CPP14_TEST_CASES :=
+CPP17_TEST_CASES :=
+CPP20_TEST_CASES :=
+MULTI_CPP_TEST_CASES :=
+
+SRCDIR = ../$(srcdir)/
+SWIGOPT += -Werror
+RUSTFLAGS =
+
+all: check
+
+broken:
+	@:
+
+%.cpptest:
+	$(setup)
+	+(cd $* && $(swig_and_compile_cpp))
+	+$(run_testcase)
+
+%.ctest:
+	$(setup)
+	+(cd $* && $(swig_and_compile_c))
+	+$(run_testcase)
+
+%.multicpptest:
+	$(setup)
+	+(cd $* && $(swig_and_compile_multi_cpp))
+	+$(run_testcase)
+
+setup = \
+	if [ -f $(SCRIPTDIR)/$(SCRIPTPREFIX)$*$(SCRIPTSUFFIX) ]; then	  \
+	  $(ECHO_PROGRESS) "$(ACTION)ing $(LANGUAGE) testcase $* (with run test)" ; \
+	else								  \
+	  $(ECHO_PROGRESS) "$(ACTION)ing $(LANGUAGE) testcase $*" ;	  \
+	fi;								  \
+	if [ ! -d $* ]; then						  \
+	  mkdir $*;							  \
+	fi
+
+run_testcase = \
+	if [ -f $(SCRIPTDIR)/$(SCRIPTPREFIX)$*$(SCRIPTSUFFIX) ]; then \
+	  cp $(SCRIPTDIR)/$(SCRIPTPREFIX)$*$(SCRIPTSUFFIX) $*/$*_runme.rs && \
+	  $(MAKE) -f $*/$(top_builddir)/$(EXAMPLES)/Makefile \
+	  SRCDIR='$*/' RUSTFLAGS='$(RUSTFLAGS) -L $*' RUNME='$*_runme' TARGET='$*' rust_compile && \
+	  env LD_LIBRARY_PATH="$*:$$LD_LIBRARY_PATH" DYLD_LIBRARY_PATH="$*:$$DYLD_LIBRARY_PATH" \
+	  $(RUNTOOL) ./$*_runme; \
+	else \
+	  $(COMPILETOOL) $(RUSTC) $(RUSTFLAGS) --crate-type lib $*/$*.rs -o $*/lib$*_rust.rlib; \
+	fi
+
+%.clean:
+	@if [ -d $* ]; then \
+	  rm -rf $*; \
+	fi
+
+clean:
+	@rm -f *_runme

@@ -219,6 +219,7 @@ jobs:
           PY_ABI_VER: '3.5'
         - SWIGLANG: r
           os: ubuntu-24.04
+        - SWIGLANG: rust
         - SWIGLANG: ruby
           VER: '2.0'
         - SWIGLANG: ruby
@@ -285,6 +286,8 @@ jobs:
           CPPSTD: c++11
         - SWIGLANG: r
           CPPSTD: c++11
+        - SWIGLANG: rust
+          CPPSTD: c++11
         - SWIGLANG: ruby
           CPPSTD: c++11
           VER: '3.3'
@@ -328,6 +331,8 @@ jobs:
         - SWIGLANG: python
           CPPSTD: c++14
         - SWIGLANG: r
+          CPPSTD: c++14
+        - SWIGLANG: rust
           CPPSTD: c++14
         - SWIGLANG: ruby
           CPPSTD: c++14
