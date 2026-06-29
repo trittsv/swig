@@ -7,6 +7,46 @@
 %insert(runtime) %{
 %}
 
+%fragment("SWIG_PackData", "header") {
+SWIGINTERN char *SWIG_PackData(char *c, void *ptr, size_t sz) {
+  static const char hex[17] = "0123456789abcdef";
+  const unsigned char *u = (unsigned char *)ptr;
+  const unsigned char *eu = u + sz;
+  for (; u != eu; ++u) {
+    unsigned char uu = *u;
+    *(c++) = hex[(uu & 0xf0) >> 4];
+    *(c++) = hex[uu & 0xf];
+  }
+  return c;
+}
+}
+
+%fragment("SWIG_UnPackData", "header") {
+SWIGINTERN const char *SWIG_UnpackData(const char *c, void *ptr, size_t sz) {
+  unsigned char *u = (unsigned char *)ptr;
+  const unsigned char *eu = u + sz;
+  for (; u != eu; ++u) {
+    char d = *(c++);
+    unsigned char uu;
+    if ((d >= '0') && (d <= '9'))
+      uu = (unsigned char)((d - '0') << 4);
+    else if ((d >= 'a') && (d <= 'f'))
+      uu = (unsigned char)((d - ('a' - 10)) << 4);
+    else
+      return (char *)0;
+    d = *(c++);
+    if ((d >= '0') && (d <= '9'))
+      uu |= (unsigned char)(d - '0');
+    else if ((d >= 'a') && (d <= 'f'))
+      uu |= (unsigned char)(d - ('a' - 10));
+    else
+      return (char *)0;
+    *u = uu;
+  }
+  return c;
+}
+}
+
 /* Primitive director C ABI types. These mirror the C# director typemap
    structure, but use Rust's libc-compatible primitive names in rust.cxx. */
 %typemap(ctype) bool,               const bool &               "bool"
@@ -136,6 +176,8 @@
 %typemap(in) SWIGTYPE ($&1_type argp)
 %{ argp = ($&1_ltype)$input;
    $1 = *argp; %}
+%typemap(in, fragment="SWIG_UnPackData") SWIGTYPE (CLASS::*)
+%{ SWIG_UnpackData($input, (void *)&$1, sizeof($1)); %}
 %typemap(in) SWIGTYPE *, SWIGTYPE &, SWIGTYPE &&, SWIGTYPE [], SWIGTYPE *const& %{ $1 = ($1_ltype)$input; %}
 
 %typemap(out) bool               %{ $result = $1; %}
@@ -154,9 +196,28 @@
 %typemap(out) double             %{ $result = $1; %}
 %typemap(out) size_t             %{ $result = $1; %}
 %typemap(out) ptrdiff_t          %{ $result = $1; %}
+%typemap(out) const bool &       %{ $result = *$1; %}
+%typemap(out) const char &       %{ $result = *$1; %}
+%typemap(out) const signed char & %{ $result = *$1; %}
+%typemap(out) const unsigned char & %{ $result = *$1; %}
+%typemap(out) const short &      %{ $result = *$1; %}
+%typemap(out) const unsigned short & %{ $result = *$1; %}
+%typemap(out) const int &        %{ $result = *$1; %}
+%typemap(out) const unsigned int & %{ $result = *$1; %}
+%typemap(out) const long &       %{ $result = *$1; %}
+%typemap(out) const unsigned long & %{ $result = *$1; %}
+%typemap(out) const long long &  %{ $result = *$1; %}
+%typemap(out) const unsigned long long & %{ $result = *$1; %}
+%typemap(out) const float &      %{ $result = *$1; %}
+%typemap(out) const double &     %{ $result = *$1; %}
+%typemap(out) const size_t &     %{ $result = *$1; %}
+%typemap(out) const ptrdiff_t &  %{ $result = *$1; %}
 %typemap(out, null="") void      ""
 %typemap(out) char *, char *&, char[ANY], char[] %{ $result = (char *)$1; %}
 %typemap(out) SWIGTYPE %{ $result = new $1_ltype($1); %}
+%typemap(out, fragment="SWIG_PackData") SWIGTYPE (CLASS::*)
+%{ $result = (char *)malloc(2 * sizeof($1) + 1);
+   *(SWIG_PackData($result, (void *)&$1, sizeof($1))) = '\0'; %}
 %typemap(out) SWIGTYPE *, SWIGTYPE &, SWIGTYPE &&, SWIGTYPE [], SWIGTYPE *const& %{ $result = (void *)$1; %}
 
 %typemap(rustin) bool,

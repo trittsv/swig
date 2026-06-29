@@ -9,6 +9,12 @@
 #include <vector>
 %}
 
+#if __cplusplus >= 201703L
+#define SWIG_RUST_THROW_OUT_OF_RANGE noexcept(false)
+#else
+#define SWIG_RUST_THROW_OUT_OF_RANGE throw (std::out_of_range)
+#endif
+
 %include <std_except.i>
 
 namespace std {
@@ -34,19 +40,19 @@ public:
   void reserve(size_type n);
 
   %extend {
-    T getitemcopy(int index) throw (std::out_of_range) {
+    T getitemcopy(int index) SWIG_RUST_THROW_OUT_OF_RANGE {
       if (index >= 0 && index < (int)$self->size())
         return (*$self)[index];
       throw std::out_of_range("index");
     }
 
-    const T &getitem(int index) throw (std::out_of_range) {
+    const T &getitem(int index) SWIG_RUST_THROW_OUT_OF_RANGE {
       if (index >= 0 && index < (int)$self->size())
         return (*$self)[index];
       throw std::out_of_range("index");
     }
 
-    void setitem(int index, const T &value) throw (std::out_of_range) {
+    void setitem(int index, const T &value) SWIG_RUST_THROW_OUT_OF_RANGE {
       if (index >= 0 && index < (int)$self->size()) {
         (*$self)[index] = value;
         return;

@@ -26,7 +26,7 @@ class string;
    } %}
 %typemap(out) string %{ $result = SWIG_RustStringCopy($1.c_str()); %}
 
-%typemap(rustin, pre="let $rustinput_cstr = std::ffi::CString::new($rustinput).expect(\"string contains interior nul byte\");") string "$rustinput_cstr.as_ptr()"
+%typemap(rustin, pre="let $rustinput_cstr = std::ffi::CString::new($rustinput).expect(\"string contains interior nul byte\");") string "$rustinput_cstr.as_ptr() as *mut c_char"
 %typemap(rustout) string {
 let ptr = $imcall;
 if ptr.is_null() {
@@ -59,7 +59,7 @@ if ptr.is_null() {
    $1 = &temp; %}
 %typemap(out) const string & %{ $result = SWIG_RustStringCopy($1->c_str()); %}
 
-%typemap(rustin, pre="let $rustinput_cstr = std::ffi::CString::new($rustinput).expect(\"string contains interior nul byte\");") const string & "$rustinput_cstr.as_ptr()"
+%typemap(rustin, pre="let $rustinput_cstr = std::ffi::CString::new($rustinput).expect(\"string contains interior nul byte\");") const string & "$rustinput_cstr.as_ptr() as *mut c_char"
 %typemap(rustout) const string & {
 let ptr = $imcall;
 if ptr.is_null() {

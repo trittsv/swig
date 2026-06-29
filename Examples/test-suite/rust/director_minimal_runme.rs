@@ -1,5 +1,6 @@
 mod director_minimal;
 
+use director_minimal::MinimalDirector;
 use std::ffi::c_void;
 
 struct MyMinimal {

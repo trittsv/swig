@@ -787,6 +787,23 @@ fi
 
 AC_SUBST(RUSTC)
 
+case $host in
+*-*-darwin*)
+    RUSTSO=".dylib"
+    RUSTLDSHARED='$(CC) -dynamiclib'
+    RUSTCXXSHARED='$(CXX) -dynamiclib'
+    ;;
+*)
+    RUSTSO=$SO
+    RUSTLDSHARED='$(LDSHARED)'
+    RUSTCXXSHARED='$(CXXSHARED)'
+    ;;
+esac
+
+AC_SUBST(RUSTSO)
+AC_SUBST(RUSTLDSHARED)
+AC_SUBST(RUSTCXXSHARED)
+
 #----------------------------------------------------------------
 # Look for D
 #----------------------------------------------------------------

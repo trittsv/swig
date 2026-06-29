@@ -406,6 +406,9 @@ d_clean:
 
 RUSTC = @RUSTC@
 RUST_RUNME = ./$(RUNME)
+RUST_SO = @RUSTSO@
+RUST_LDSHARED = @RUSTLDSHARED@
+RUST_CXXSHARED = @RUSTCXXSHARED@
 
 # ----------------------------------------------------------------
 # Build a dynamically loadable Rust wrapper for a C module
@@ -414,7 +417,7 @@ RUST_RUNME = ./$(RUNME)
 rust: $(SRCDIR_SRCS)
 	$(SWIG) -rust $(SWIGOPT) -o $(ISRCS) $(INTERFACEPATH)
 	$(CC) -c $(CCSHARED) $(CPPFLAGS) $(CFLAGS) $(SRCDIR_SRCS) $(ISRCS) $(INCLUDES)
-	$(LDSHARED) $(CFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) -o lib$(TARGET)$(SO)
+	$(RUST_LDSHARED) $(CFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) -o lib$(TARGET)$(RUST_SO)
 
 # ----------------------------------------------------------------
 # Build a dynamically loadable Rust wrapper for a C++ module
@@ -423,7 +426,7 @@ rust: $(SRCDIR_SRCS)
 rust_cpp: $(SRCDIR_SRCS)
 	$(SWIG) -rust -c++ $(SWIGOPT) -o $(ICXXSRCS) $(INTERFACEPATH)
 	$(CXX) -c $(CCSHARED) $(CPPFLAGS) $(CXXFLAGS) $(SRCDIR_SRCS) $(SRCDIR_CXXSRCS) $(ICXXSRCS) $(INCLUDES)
-	$(CXXSHARED) $(CXXFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) $(CPP_DLLIBS) -o lib$(TARGET)$(SO)
+	$(RUST_CXXSHARED) $(CXXFLAGS) $(LDFLAGS) $(OBJS) $(IOBJS) $(LIBS) $(CPP_DLLIBS) -o lib$(TARGET)$(RUST_SO)
 
 # ----------------------------------------------------------------
 # Compile Rust files
@@ -453,7 +456,7 @@ rust_version:
 rust_clean:
 	rm -f *_wrap* *~ .~* $(RUNME) `find . -name \*.rs | grep -v $(RUNME).rs`
 	rm -f core @EXTRA_CLEAN@
-	rm -f *.@OBJEXT@ *@SO@
+	rm -f *.@OBJEXT@ *@SO@ *$(RUST_SO)
 
 ##################################################################
 #####                       Go                              ######

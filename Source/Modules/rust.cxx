@@ -229,6 +229,12 @@ public:
 
     Swig_banner_target_lang(f_rust, "//");
     Printf(f_rust, "\n");
+    Printf(f_rust, "#![allow(dead_code)]\n");
+    Printf(f_rust, "#![allow(non_camel_case_types)]\n");
+    Printf(f_rust, "#![allow(non_snake_case)]\n");
+    Printf(f_rust, "#![allow(non_upper_case_globals)]\n");
+    Printf(f_rust, "#![allow(path_statements)]\n");
+    Printf(f_rust, "#![allow(unused_imports)]\n\n");
     Printf(f_rust,
            "use std::os::raw::{c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short, c_uchar, c_uint, c_ulong, "
            "c_ulonglong, c_ushort, c_void};\n\n");
@@ -481,6 +487,7 @@ public:
     }
 
     String *actioncode = emit_action(n);
+    Replaceall(actioncode, "$null", is_void_return ? "" : "0");
     if ((tm = Swig_typemap_lookup_out("out", n, Swig_cresult_name(), f, actioncode))) {
       Replaceall(tm, "$result", "jresult");
       Replaceall(tm, "$owner", GetFlag(n, "feature:new") ? "1" : "0");
@@ -499,7 +506,6 @@ public:
     Wrapper_print(f, f_wrappers);
     writeRustFunction(n, overloaded_name, wname, return_imtype, return_rusttype, rust_im_params, rust_params, rust_pre_code, rust_args);
 
-    Delete(actioncode);
     Delete(outarg);
     Delete(cleanup);
     Delete(rust_pre_code);
@@ -527,10 +533,16 @@ public:
       return SWIG_ERROR;
     }
 
-    if (value && rustTypeIsPrimitive(type))
-      Printf(f_rust, "pub const %s: %s = %s;\n", symname, rust_type, value);
-    else
+    if (Getattr(n, "wrappedasconstant") && Getattr(n, "staticmembervariableHandler:value"))
+      value = Getattr(n, "staticmembervariableHandler:value");
+
+    if (value && rustTypeIsPrimitive(type)) {
+      String *rust_name = rustIdentifier(symname);
+      Printf(f_rust, "pub const %s: %s = %s;\n", rust_name, rust_type, value);
+      Delete(rust_name);
+    } else {
       Swig_warning(WARN_LANG_NATIVE_UNIMPL, input_file, line_number, "Rust constant '%s' has unsupported type %s\n", symname, SwigType_str(type, 0));
+    }
 
     Delete(rust_type);
     return SWIG_OK;
@@ -604,11 +616,14 @@ public:
       }
     }
 
-    Delete(proxy_class_name);
+    if (proxy_class_name && proxy_class_name != old_proxy_class_name)
+      Delete(proxy_class_name);
     proxy_class_name = old_proxy_class_name;
-    Delete(proxy_class_code);
+    if (proxy_class_code && proxy_class_code != old_proxy_class_code)
+      Delete(proxy_class_code);
     proxy_class_code = old_proxy_class_code;
-    Delete(destructor_call);
+    if (destructor_call && destructor_call != old_destructor_call)
+      Delete(destructor_call);
     destructor_call = old_destructor_call;
 
     return result;
@@ -649,14 +664,22 @@ public:
     String *symname = Getattr(n, "sym:name");
     String *old_enum_code = proxy_class_code;
     String *enum_code = NewString("");
+    String *rust_enum_name = symname ? rustIdentifier(symname) : NULL;
+    String *scope = NULL;
     proxy_class_code = enum_code;
 
     if (symname && !Getattr(n, "unnamedinstance")) {
-      if (!addSymbol(symname, n))
+      if (getCurrentClass()) {
+        Delete(rust_enum_name);
+        rust_enum_name = Swig_name_member(getNSpace(), getClassPrefix(), symname);
+        scope = Copy(getClassPrefix());
+      }
+      if (!addSymbol(symname, n, scope))
         return SWIG_ERROR;
+      Setattr(n, "rust:enumname", rust_enum_name);
       Printf(enum_code, "#[repr(C)]\n");
       Printf(enum_code, "#[derive(Copy, Clone, Debug, PartialEq, Eq)]\n");
-      Printf(enum_code, "pub enum %s {\n", symname);
+      Printf(enum_code, "pub enum %s {\n", rust_enum_name);
       Language::enumDeclaration(n);
       Printf(enum_code, "}\n\n");
       Printv(rust_proxy_code, enum_code, NIL);
@@ -665,6 +688,8 @@ public:
     }
 
     proxy_class_code = old_enum_code;
+    Delete(scope);
+    Delete(rust_enum_name);
     Delete(enum_code);
     return SWIG_OK;
   }
@@ -676,16 +701,28 @@ public:
     Node *parent = parentNode(n);
     String *parent_name = Getattr(parent, "sym:name");
 
-    if (!addSymbol(symname, n))
-      return SWIG_ERROR;
-
     if (parent_name && proxy_class_code) {
-      Printf(proxy_class_code, "  %s", symname);
+      String *scope = Getattr(parent, "rust:enumname") ? Copy(Getattr(parent, "rust:enumname")) : Copy(parent_name);
+      String *rust_name = rustIdentifier(symname);
+      if (!addSymbol(symname, n, scope)) {
+        Delete(rust_name);
+        Delete(scope);
+        return SWIG_ERROR;
+      }
+      Printf(proxy_class_code, "  %s", rust_name);
       if (value)
         Printf(proxy_class_code, " = %s", value);
       Printf(proxy_class_code, ",\n");
+      Delete(rust_name);
+      Delete(scope);
     } else if (value) {
-      Printf(rust_proxy_code, "pub const %s: c_int = %s;\n", symname, value);
+      String *rust_name = rustIdentifier(symname);
+      if (!addSymbol(symname, n)) {
+        Delete(rust_name);
+        return SWIG_ERROR;
+      }
+      Printf(rust_proxy_code, "pub const %s: c_int = %s;\n", rust_name, value);
+      Delete(rust_name);
     }
 
     Swig_restore(n);
@@ -1058,11 +1095,13 @@ public:
         Printf(rust_proxy_code, " -> %s", rust_return);
       Printf(rust_proxy_code, ";\n");
 
-      Printf(director_trait_code, "  unsafe fn %s(&mut self%s%s)", symname, Len(rust_trait_params) ? ", " : "", rust_trait_params);
+      String *rust_trait_name = rustIdentifier(symname);
+      Printf(director_trait_code, "  unsafe fn %s(&mut self%s%s)", rust_trait_name, Len(rust_trait_params) ? ", " : "", rust_trait_params);
       if (Cmp(rust_return, "()") != 0)
         Printf(director_trait_code, " -> %s", rust_return);
       Printf(director_trait_code, ";\n");
 
+      Delete(rust_trait_name);
       Delete(rust_return);
       Delete(rust_dmethod);
       Delete(member_name);
@@ -1235,7 +1274,7 @@ private:
   }
 
   String *rustProxyMethodName(Node *n) {
-    String *method_name = Copy(Getattr(n, "sym:name"));
+    String *method_name = rustIdentifier(Getattr(n, "sym:name"));
     if (Getattr(n, "sym:overloaded"))
       Printf(method_name, "_%s", Getattr(n, "sym:overname"));
     return method_name;
@@ -1517,13 +1556,15 @@ private:
 
   void writeRustFunction(Node *n, String *rust_name, String *c_name, String *raw_return, String *rust_return, String *rust_im_params, String *rust_params,
                          String *rust_pre_code, String *rust_args) {
+    String *public_rust_name = rustIdentifier(rust_name);
+
     Printf(rust_extern_code, "  #[link_name = \"%s\"]\n", c_name);
     Printf(rust_extern_code, "  pub fn %s_raw(%s)", rust_name, rust_im_params);
     if (Cmp(raw_return, "()") != 0)
       Printf(rust_extern_code, " -> %s", raw_return);
     Printf(rust_extern_code, ";\n");
 
-    Printf(rust_proxy_code, "pub unsafe fn %s(%s)", rust_name, rust_params);
+    Printf(rust_proxy_code, "pub unsafe fn %s(%s)", public_rust_name, rust_params);
     if (Cmp(rust_return, "()") != 0)
       Printf(rust_proxy_code, " -> %s", rust_return);
     Printf(rust_proxy_code, " {\n");
@@ -1534,6 +1575,28 @@ private:
     Printf(rust_proxy_code, "}\n\n");
     Delete(body);
     Delete(imcall);
+    Delete(public_rust_name);
+  }
+
+  bool isRustKeyword(const String *name) const {
+    static const char *keywords[] = {"Self",   "abstract", "as",    "async",  "await", "become", "box",    "break",  "const", "continue", "crate", "do",
+                                     "dyn",    "else",     "enum",  "extern", "false", "final",  "fn",     "for",    "if",    "impl",     "in",    "let",
+                                     "loop",   "macro",    "match", "mod",    "move",  "mut",    "priv",   "pub",    "ref",   "return",   "self",  "static",
+                                     "struct", "super",    "trait", "true",   "try",   "type",   "typeof", "unsafe", "use",   "where",    "while", "yield"};
+
+    for (size_t i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {
+      if (Cmp(name, keywords[i]) == 0)
+        return true;
+    }
+    return false;
+  }
+
+  String *rustIdentifier(const String *name) const {
+    if (!name)
+      return NewString("");
+    if (isRustKeyword(name))
+      return NewStringf("r#%s", name);
+    return Copy(name);
   }
 
   bool rustTypeIsPrimitive(SwigType *t) {

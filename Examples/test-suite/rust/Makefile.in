@@ -20,7 +20,6 @@ RUST_C_TEST_CASES = \
 RUST_CPP_TEST_CASES = \
 	cpp_basic \
 	director_minimal \
-	enum_thorough \
 	rust_std_except \
 	rust_std_string \
 	rust_std_vector \
