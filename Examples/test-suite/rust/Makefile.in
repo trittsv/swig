@@ -88,5 +88,5 @@ run_testcase = \
 	  rm -rf $*; \
 	fi
 
-clean:
+clean: $(ALL_CLEAN)
 	@rm -f *_runme
