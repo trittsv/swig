@@ -38,6 +38,12 @@ Version 4.5.0 (in progress)
             added array, deque, list, map, optional, pair, set, string_view,
             smart pointer, wchar and argv typemaps, with a C++17 Rust CI build
             covering optional and string_view.
+            Rust now adds further C#-baseline library coverage for cdata.i,
+            complex.i, std_complex.i, std_unordered_map.i,
+            std_unordered_set.i, std_common.i, swigtype_inout.i,
+            std_auto_ptr.i and enum support include files, together with Rust
+            test-suite coverage for cdata, complex, unordered containers,
+            pointer output typemaps, auto_ptr and enum includes.
             Rust proxy constructors now expose default constructors as new()
             and compact names such as new_1() for additional overloads instead
             of leaking SWIG overload suffixes into the Rust API.

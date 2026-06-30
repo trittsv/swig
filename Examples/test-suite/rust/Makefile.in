@@ -29,6 +29,8 @@ RUST_CPP_TEST_CASES = \
 	rust_arrays \
 	rust_boost_intrusive_ptr \
 	rust_boost_shared_ptr \
+	rust_cdata_complex \
+	rust_enums \
 	rust_std_deque \
 	rust_std_except \
 	rust_std_list \
@@ -40,12 +42,18 @@ RUST_CPP_TEST_CASES = \
 	rust_std_wstring \
 	rust_swiginterface \
 	rust_swigmove \
+	rust_swigtype_inout \
 	rust_wchar \
 
 RUST_CPP11_TEST_CASES = \
 	rust_std_array \
 	rust_std_shared_ptr \
+	rust_std_unordered_map \
+	rust_std_unordered_set \
 	rust_std_unique_ptr \
+
+RUST_CPP11_PRE_CPP17_TEST_CASES = \
+	rust_std_auto_ptr \
 
 RUST_CPP17_TEST_CASES = \
 	rust_std_optional \
@@ -60,6 +68,18 @@ RUST_CXX11_OR_LATER = \
 	$(findstring gnu++14,$(CXXFLAGS)) \
 	$(findstring gnu++17,$(CXXFLAGS)) \
 	$(findstring gnu++20,$(CXXFLAGS))
+
+RUST_CXX17_OR_LATER = \
+	$(findstring c++17,$(CXXFLAGS)) \
+	$(findstring c++20,$(CXXFLAGS)) \
+	$(findstring gnu++17,$(CXXFLAGS)) \
+	$(findstring gnu++20,$(CXXFLAGS))
+
+ifneq (,$(strip $(RUST_CXX11_OR_LATER)))
+ifeq (,$(strip $(RUST_CXX17_OR_LATER)))
+RUST_CPP11_TEST_CASES += $(RUST_CPP11_PRE_CPP17_TEST_CASES)
+endif
+endif
 
 ERROR_TEST_CASES = \
 	$(RUST_CPP_TEST_CASES:=.cpptest) \
