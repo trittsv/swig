@@ -38,6 +38,9 @@ Version 4.5.0 (in progress)
             added array, deque, list, map, optional, pair, set, string_view,
             smart pointer, wchar and argv typemaps, with a C++17 Rust CI build
             covering optional and string_view.
+            Rust proxy constructors now expose default constructors as new()
+            and compact names such as new_1() for additional overloads instead
+            of leaking SWIG overload suffixes into the Rust API.
 
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs

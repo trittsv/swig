@@ -1443,8 +1443,13 @@ private:
 
   String *rustConstructorName(Node *n) {
     String *constructor_name = NewString("new");
-    if (Getattr(n, "sym:overloaded"))
-      Printf(constructor_name, "_%s", Getattr(n, "sym:overname"));
+    if (Getattr(n, "sym:overloaded") && ParmList_len(Getattr(n, "parms")) > 0) {
+      String *overname = Getattr(n, "sym:overname");
+      if (overname && Strncmp(overname, "__SWIG_", 7) == 0)
+        Printf(constructor_name, "_%s", Char(overname) + 7);
+      else
+        Printf(constructor_name, "_%s", overname);
+    }
     return constructor_name;
   }
 

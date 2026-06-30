@@ -2,7 +2,7 @@ mod rust_std_vector;
 
 fn main() {
     unsafe {
-        let values = rust_std_vector::IntVector::new___SWIG_0();
+        let values = rust_std_vector::IntVector::new();
         values.push_back(10);
         values.push_back(20);
         values.push_back(12);

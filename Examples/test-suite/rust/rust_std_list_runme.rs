@@ -2,7 +2,7 @@ mod rust_std_list;
 
 fn main() {
     unsafe {
-        let values = rust_std_list::IntList::new___SWIG_0();
+        let values = rust_std_list::IntList::new();
         values.push_back(3);
         values.push_front(2);
         values.push_back(5);

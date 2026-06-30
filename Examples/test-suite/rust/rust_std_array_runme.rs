@@ -2,7 +2,7 @@ mod rust_std_array;
 
 fn main() {
     unsafe {
-        let values = rust_std_array::IntArray3::new___SWIG_0();
+        let values = rust_std_array::IntArray3::new();
         values.fill(4);
         values.setitem(1, 9);
 

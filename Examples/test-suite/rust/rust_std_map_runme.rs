@@ -2,7 +2,7 @@ mod rust_std_map;
 
 fn main() {
     unsafe {
-        let values = rust_std_map::IntIntMap::new___SWIG_0();
+        let values = rust_std_map::IntIntMap::new();
         values.setitem(2, 20);
         values.setitem(3, 30);
 

@@ -2,7 +2,7 @@ mod rust_std_set;
 
 fn main() {
     unsafe {
-        let values = rust_std_set::IntSet::new___SWIG_0();
+        let values = rust_std_set::IntSet::new();
         values.insert_value(7);
         values.insert_value(2);
         values.insert_value(7);
