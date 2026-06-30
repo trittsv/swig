@@ -25,29 +25,45 @@ RUST_CPP_TEST_CASES = \
 	rust_arrays \
 	rust_boost_intrusive_ptr \
 	rust_boost_shared_ptr \
-	rust_std_array \
 	rust_std_deque \
 	rust_std_except \
 	rust_std_list \
 	rust_std_map \
 	rust_std_pair \
 	rust_std_set \
-	rust_std_shared_ptr \
 	rust_std_string \
-	rust_std_unique_ptr \
 	rust_std_vector \
 	rust_std_wstring \
 	rust_swiginterface \
 	rust_swigmove \
 	rust_wchar \
 
+RUST_CPP11_TEST_CASES = \
+	rust_std_array \
+	rust_std_shared_ptr \
+	rust_std_unique_ptr \
+
 RUST_CPP17_TEST_CASES = \
 	rust_std_optional \
 	rust_std_string_view \
 
+RUST_CXX11_OR_LATER = \
+	$(findstring c++11,$(CXXFLAGS)) \
+	$(findstring c++14,$(CXXFLAGS)) \
+	$(findstring c++17,$(CXXFLAGS)) \
+	$(findstring c++20,$(CXXFLAGS)) \
+	$(findstring gnu++11,$(CXXFLAGS)) \
+	$(findstring gnu++14,$(CXXFLAGS)) \
+	$(findstring gnu++17,$(CXXFLAGS)) \
+	$(findstring gnu++20,$(CXXFLAGS))
+
 ERROR_TEST_CASES = \
 	$(RUST_CPP_TEST_CASES:=.cpptest) \
 	$(RUST_C_TEST_CASES:=.ctest)
+
+ifneq (,$(strip $(RUST_CXX11_OR_LATER)))
+ERROR_TEST_CASES += $(RUST_CPP11_TEST_CASES:=.cpptest)
+endif
 
 ifneq (,$(findstring c++17,$(CXXFLAGS)))
 ERROR_TEST_CASES += $(RUST_CPP17_TEST_CASES:=.cpptest)
@@ -57,7 +73,7 @@ include $(srcdir)/../common.mk
 
 C_TEST_CASES := $(RUST_C_TEST_CASES)
 CPP_TEST_CASES := $(RUST_CPP_TEST_CASES)
-CPP11_TEST_CASES :=
+CPP11_TEST_CASES := $(RUST_CPP11_TEST_CASES)
 CPP14_TEST_CASES :=
 CPP17_TEST_CASES := $(RUST_CPP17_TEST_CASES)
 CPP20_TEST_CASES :=

@@ -33,7 +33,7 @@ public:
 
   %extend {
     T getitem(const K &key) SWIG_RUST_THROW_OUT_OF_RANGE {
-      typename std::map<K, T>::const_iterator it = $self->find(key);
+      std::map<K, T>::const_iterator it = $self->find(key);
       if (it != $self->end())
         return it->second;
       throw std::out_of_range("key");
