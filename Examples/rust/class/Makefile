@@ -14,7 +14,7 @@ build:
 	$(MAKE) -f $(TOP)/Makefile SRCDIR='$(SRCDIR)' CXXSRCS='$(CXXSRCS)' \
 	SWIG_LIB_DIR='$(SWIG_LIB_DIR)' SWIGEXE='$(SWIGEXE)' \
 	SWIGOPT='$(SWIGOPT)' TARGET='$(TARGET)' INTERFACE='$(INTERFACE)' rust_cpp
-	$(MAKE) -f $(TOP)/Makefile SRCDIR='$(SRCDIR)' RUNME='$(RUNME)' TARGET='$(TARGET)' rust_compile
+	$(MAKE) -f $(TOP)/Makefile SRCDIR='$(SRCDIR)' RUNME='$(RUNME)' TARGET='$(TARGET)' RUST_RUNME_CRATE='$(RUNME).rs' rust_compile
 
 clean:
-	$(MAKE) -f $(TOP)/Makefile SRCDIR='$(SRCDIR)' RUNME='$(RUNME)' rust_clean
+	$(MAKE) -f $(TOP)/Makefile SRCDIR='$(SRCDIR)' RUNME='$(RUNME)' RUST_RUNME_CRATE='$(RUNME).rs' rust_clean
