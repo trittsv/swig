@@ -41,6 +41,8 @@ class RUST : public Language {
   String *director_callbacks;
   String *director_connect_parms;
   String *director_trait_code;
+  String *director_callback_shims;
+  String *director_method_metadata;
   List *dmethods_seq;
   Hash *dmethods_table;
   int n_dmethods;
@@ -69,6 +71,8 @@ public:
     director_callbacks(NULL),
     director_connect_parms(NULL),
     director_trait_code(NULL),
+    director_callback_shims(NULL),
+    director_method_metadata(NULL),
     dmethods_seq(NULL),
     dmethods_table(NULL),
     n_dmethods(0),
@@ -745,6 +749,8 @@ public:
     director_callbacks = NewString("");
     director_connect_parms = NewString("");
     director_trait_code = NewStringf("pub trait %sDirector {\n", Getattr(n, "sym:name"));
+    director_callback_shims = NewString("");
+    director_method_metadata = NewString("");
 
     return Language::classDirectorInit(n);
   }
@@ -825,6 +831,12 @@ public:
     String *callback_args = NewString("");
     String *rust_callback_type = NewString("");
     String *rust_trait_params = NewString("");
+    String *rust_shim_params = NewString("");
+    String *rust_shim_args = NewString("");
+    String *rust_shim_pre_code = NewString("");
+    String *rust_shim_post_code = NewString("");
+    String *rust_shim_terminator_code = NewString("");
+    String *rust_method_types = NewString("");
     String *declaration = NewString("");
     Wrapper *w = NewWrapper();
     int status = SWIG_OK;
@@ -863,7 +875,10 @@ public:
     Swig_director_parms_fixup(l);
     Swig_typemap_attach_parms("out", l, 0);
     Swig_typemap_attach_parms("ctype", l, 0);
+    Swig_typemap_attach_parms("imtype", l, 0);
+    Swig_typemap_attach_parms("rusttype", l, 0);
     Swig_typemap_attach_parms("directorin", l, w);
+    Swig_typemap_attach_parms("rustdirectorin", l, 0);
     Swig_typemap_attach_parms("directorargout", l, w);
 
     if (!ignored_method)
@@ -906,14 +921,34 @@ public:
 
       String *ln = makeParameterName(n, p, i, false);
       String *arg = NewStringf("j%s", ln);
+      String *rust_arg = NewStringf("arg%d", i);
       String *c_param_type = Getattr(p, "tmap:ctype");
       String *c_decl = NewString("");
-      String *rust_type = rustType(pt);
+      String *im_type = Getattr(p, "tmap:imtype");
+      String *rust_type = Getattr(p, "tmap:rusttype");
+      String *owned_im_type = NULL;
+      String *owned_rust_type = NULL;
 
       if (c_param_type) {
         String *ctypeout = Getattr(p, "tmap:ctype:out");
         if (ctypeout)
           c_param_type = ctypeout;
+        if (im_type) {
+          String *imtypeout = Getattr(p, "tmap:imtype:out");
+          if (imtypeout)
+            im_type = imtypeout;
+        } else {
+          owned_im_type = rustType(pt);
+          im_type = owned_im_type;
+        }
+        if (rust_type) {
+          String *rusttypeout = Getattr(p, "tmap:rusttype:out");
+          if (rusttypeout)
+            rust_type = rusttypeout;
+        } else {
+          owned_rust_type = rustType(pt);
+          rust_type = owned_rust_type;
+        }
 
         Printf(c_decl, "%s %s", c_param_type, arg);
         if (!ignored_method)
@@ -935,11 +970,69 @@ public:
 
           if (Len(rust_callback_type))
             Printf(rust_callback_type, ", ");
-          Printf(rust_callback_type, "%s", rust_type);
+          Printf(rust_callback_type, "%s", im_type);
 
           if (Len(rust_trait_params))
             Printf(rust_trait_params, ", ");
           Printf(rust_trait_params, "arg%d: %s", i, rust_type);
+
+          if (Len(rust_shim_params))
+            Printf(rust_shim_params, ", ");
+          Printf(rust_shim_params, "arg%d: %s", i, im_type);
+
+          String *din = Copy(Getattr(p, "tmap:rustdirectorin"));
+          if (din) {
+            Replaceall(din, "$iminput", rust_arg);
+            Replaceall(din, "$rustinput", rust_arg);
+            Replaceall(din, "$input", rust_arg);
+            if (Len(rust_shim_args))
+              Printf(rust_shim_args, ", ");
+            Printv(rust_shim_args, din, NIL);
+
+            String *pre = Getattr(p, "tmap:rustdirectorin:pre");
+            if (pre) {
+              String *pre_code = Copy(pre);
+              Replaceall(pre_code, "$iminput", rust_arg);
+              Replaceall(pre_code, "$rustinput", rust_arg);
+              Replaceall(pre_code, "$input", rust_arg);
+              Printf(rust_shim_pre_code, "    %s\n", pre_code);
+              Delete(pre_code);
+            }
+            String *post = Getattr(p, "tmap:rustdirectorin:post");
+            if (post) {
+              String *post_code = Copy(post);
+              Replaceall(post_code, "$iminput", rust_arg);
+              Replaceall(post_code, "$rustinput", rust_arg);
+              Replaceall(post_code, "$input", rust_arg);
+              Printf(rust_shim_post_code, "    %s\n", post_code);
+              Delete(post_code);
+            }
+            String *terminator = Getattr(p, "tmap:rustdirectorin:terminator");
+            if (terminator) {
+              String *terminator_code = Copy(terminator);
+              Replaceall(terminator_code, "$iminput", rust_arg);
+              Replaceall(terminator_code, "$rustinput", rust_arg);
+              Replaceall(terminator_code, "$input", rust_arg);
+              String *indented_terminator_code = NewStringf("    %s\n", terminator_code);
+              Insert(rust_shim_terminator_code, 0, indented_terminator_code);
+              Delete(indented_terminator_code);
+              Delete(terminator_code);
+            }
+            Delete(din);
+          } else {
+            Swig_warning(WARN_TYPEMAP_DIRECTORIN_UNDEF,
+                         input_file,
+                         line_number,
+                         "No rustdirectorin typemap defined for argument %s for use in %s::%s (skipping director method)\n",
+                         SwigType_str(pt, 0),
+                         SwigType_namestr(c_classname),
+                         SwigType_namestr(name));
+            output_director = false;
+          }
+
+          if (Len(rust_method_types))
+            Printf(rust_method_types, ", ");
+          Printf(rust_method_types, "\"%s\"", rust_type);
 
           Parm *next = Getattr(p, "tmap:directorin:next");
           p = next ? next : nextSibling(p);
@@ -966,9 +1059,11 @@ public:
         p = nextSibling(p);
       }
 
-      Delete(rust_type);
+      Delete(owned_im_type);
+      Delete(owned_rust_type);
       Delete(c_decl);
       Delete(arg);
+      Delete(rust_arg);
       Delete(ln);
       i++;
     }
@@ -1078,8 +1173,17 @@ public:
       UpcallData *udata = addUpcallMethod(rust_dmethod, symname, decl, overloaded_name);
       String *methid = Getattr(udata, "class_methodidx");
       String *rust_return = rustType(returntype);
+      String *im_return = Swig_typemap_lookup("imtype", n, "", 0);
+      if (im_return) {
+        String *imtypeout = Getattr(n, "tmap:imtype:out");
+        if (imtypeout)
+          im_return = imtypeout;
+      }
+      String *rust_callback_shim = NewStringf("%s_director_callback_%s", classname, methid);
+      String *rust_trait_name = rustIdentifier(overloaded_name);
 
       Setattr(n, "upcalldata", udata);
+      Setattr(udata, "rust_callback_shim", rust_callback_shim);
       Printf(director_callback_typedefs, "    typedef %s (* SWIG_Callback%s_t)(void *rustobj", c_ret_type, methid);
       if (Len(callback_typedef_parms))
         Printf(director_callback_typedefs, ", %s", callback_typedef_parms);
@@ -1097,14 +1201,55 @@ public:
         Printf(rust_proxy_code, " -> %s", rust_return);
       Printf(rust_proxy_code, ";\n");
 
-      String *rust_trait_name = rustIdentifier(symname);
       Printf(director_trait_code, "  unsafe fn %s(&mut self%s%s)", rust_trait_name, Len(rust_trait_params) ? ", " : "", rust_trait_params);
       if (Cmp(rust_return, "()") != 0)
         Printf(director_trait_code, " -> %s", rust_return);
       Printf(director_trait_code, ";\n");
 
+      Printf(director_method_metadata, "pub const %sDirectorMethodTypes%s: &[&str] = &[%s];\n", classname, methid, rust_method_types);
+
+      Printf(director_callback_shims, "extern \"C\" fn %s<T: %sDirector>(rustobj: *mut c_void", rust_callback_shim, classname);
+      if (Len(rust_shim_params))
+        Printf(director_callback_shims, ", %s", rust_shim_params);
+      Printf(director_callback_shims, ")");
+      if (im_return && Cmp(im_return, "()") != 0)
+        Printf(director_callback_shims, " -> %s", im_return);
+      Printf(director_callback_shims, " {\n");
+      Printf(director_callback_shims, "  unsafe {\n");
+      Printf(director_callback_shims, "    let director = &mut *(rustobj as *mut T);\n");
+      Printv(director_callback_shims, rust_shim_pre_code, NIL);
+      if (Cmp(rust_return, "()") == 0) {
+        Printf(director_callback_shims, "    director.%s(%s);\n", rust_trait_name, rust_shim_args);
+      } else {
+        Printf(director_callback_shims, "    let swig_result = director.%s(%s);\n", rust_trait_name, rust_shim_args);
+        String *tm = Swig_typemap_lookup("rustdirectorout", n, "", 0);
+        if (tm) {
+          String *converted = Copy(tm);
+          Replaceall(converted, "$rustcall", "swig_result");
+          Replaceall(converted, "$imcall", "swig_result");
+          Printf(director_callback_shims, "    let swig_result = %s;\n", converted);
+          Delete(converted);
+        } else {
+          Swig_warning(WARN_TYPEMAP_DIRECTOROUT_UNDEF,
+                       input_file,
+                       line_number,
+                       "Unable to use Rust return type %s used in %s::%s (skipping director method)\n",
+                       SwigType_str(returntype, 0),
+                       SwigType_namestr(c_classname),
+                       SwigType_namestr(name));
+          output_director = false;
+        }
+      }
+      Printv(director_callback_shims, rust_shim_post_code, NIL);
+      Printv(director_callback_shims, rust_shim_terminator_code, NIL);
+      if (Cmp(rust_return, "()") != 0)
+        Printf(director_callback_shims, "    swig_result\n");
+      Printf(director_callback_shims, "  }\n");
+      Printf(director_callback_shims, "}\n\n");
+
       Delete(rust_trait_name);
       Delete(rust_return);
+      Delete(rust_callback_shim);
       Delete(rust_dmethod);
       Delete(member_name);
     }
@@ -1128,6 +1273,12 @@ public:
     Delete(callback_args);
     Delete(rust_callback_type);
     Delete(rust_trait_params);
+    Delete(rust_shim_params);
+    Delete(rust_shim_args);
+    Delete(rust_shim_pre_code);
+    Delete(rust_shim_post_code);
+    Delete(rust_shim_terminator_code);
+    Delete(rust_method_types);
     Delete(declaration);
     Delete(overloaded_name);
     DelWrapper(w);
@@ -1204,15 +1355,23 @@ public:
       Printf(director_trait_code, "}\n");
       Printv(rust_proxy_code, director_trait_code, NIL);
     }
+    if (director_method_metadata)
+      Printv(rust_proxy_code, director_method_metadata, NIL);
+    if (director_callback_shims)
+      Printv(rust_proxy_code, director_callback_shims, NIL);
 
     Delete(director_callback_typedefs);
     Delete(director_callbacks);
     Delete(director_connect_parms);
     Delete(director_trait_code);
+    Delete(director_callback_shims);
+    Delete(director_method_metadata);
     director_callback_typedefs = NULL;
     director_callbacks = NULL;
     director_connect_parms = NULL;
     director_trait_code = NULL;
+    director_callback_shims = NULL;
+    director_method_metadata = NULL;
 
     DelWrapper(w);
     Delete(dirclassname);
@@ -1460,9 +1619,12 @@ private:
     String *norm_name = SwigType_namestr(Getattr(n, "name"));
     String *dirclassname = directorClassName(n);
     String *swig_director_connect = Swig_name_member(getNSpace(), getClassPrefix(), "director_connect");
+    String *swig_director_disconnect = Swig_name_member(getNSpace(), getClassPrefix(), "director_disconnect");
     String *wname = Swig_name_wrapper(swig_director_connect);
+    String *disconnect_wname = Swig_name_wrapper(swig_director_disconnect);
     String *sym_name = Getattr(n, "sym:name");
     Wrapper *code_wrap = NewWrapper();
+    Wrapper *disconnect_wrap = NewWrapper();
 
     Printf(code_wrap->def, "SWIGEXPORT void %s(void *objarg, void *rustobj", wname);
     Printf(code_wrap->code, "  %s *obj = (%s *)objarg;\n", norm_name, norm_name);
@@ -1473,10 +1635,12 @@ private:
     Printf(rust_extern_code, "  pub fn %s_raw(obj: *mut c_void, rustobj: *mut c_void", swig_director_connect);
     String *rust_connect_params = NewString("");
     String *rust_connect_args = NewString("");
+    String *rust_trait_args = NewString("");
 
     for (int i = first_class_dmethod; i < curr_class_dmethod; ++i) {
       UpcallData *udata = Getitem(dmethods_seq, i);
       String *methid = Getattr(udata, "class_methodidx");
+      String *rust_callback_shim = Getattr(udata, "rust_callback_shim");
 
       Printf(code_wrap->def, ", %s::SWIG_Callback%s_t callback%s", dirclassname, methid, methid);
       Printf(code_wrap->code, ", callback%s", methid);
@@ -1484,15 +1648,28 @@ private:
       if (Len(rust_connect_params)) {
         Printf(rust_connect_params, ", ");
         Printf(rust_connect_args, ", ");
+        Printf(rust_trait_args, ", ");
       }
       Printf(rust_connect_params, "callback%s: %sCallback%s", methid, sym_name, methid);
       Printf(rust_connect_args, "callback%s", methid);
+      Printf(rust_trait_args, "%s::<T>", rust_callback_shim);
     }
 
     Printf(code_wrap->def, ") {\n");
     Printf(code_wrap->code, ");\n");
     Printf(code_wrap->code, "}\n");
     Printf(rust_extern_code, ");\n");
+    Printf(disconnect_wrap->def, "SWIGEXPORT void %s(void *objarg) {\n", disconnect_wname);
+    Printf(disconnect_wrap->code, "  %s *obj = (%s *)objarg;\n", norm_name, norm_name);
+    Printf(disconnect_wrap->code, "  %s *director = static_cast<%s *>(obj);\n", dirclassname, dirclassname);
+    Printf(disconnect_wrap->code, "  director->swig_connect_director(0");
+    for (int i = first_class_dmethod; i < curr_class_dmethod; ++i)
+      Printf(disconnect_wrap->code, ", 0");
+    Printf(disconnect_wrap->code, ");\n");
+    Printf(disconnect_wrap->code, "}\n");
+    Printf(rust_extern_code, "  #[link_name = \"%s\"]\n", disconnect_wname);
+    Printf(rust_extern_code, "  pub fn %s_raw(obj: *mut c_void);\n", swig_director_disconnect);
+
     Printf(rust_proxy_code, "impl %s {\n", sym_name);
     Printf(rust_proxy_code, "  pub unsafe fn connect_director(&self, rustobj: *mut c_void");
     if (Len(rust_connect_params))
@@ -1503,17 +1680,53 @@ private:
       Printf(rust_proxy_code, ", %s", rust_connect_args);
     Printf(rust_proxy_code, ");\n");
     Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub unsafe fn connect_director_trait<T: %sDirector>(&self, director: &mut T) {\n", sym_name);
+    Printf(rust_proxy_code, "    self.connect_director(director as *mut T as *mut c_void");
+    if (Len(rust_trait_args))
+      Printf(rust_proxy_code, ", %s", rust_trait_args);
+    Printf(rust_proxy_code, ");\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub unsafe fn disconnect_director(&self) {\n");
+    Printf(rust_proxy_code, "    %s_raw(self.as_ptr());\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "}\n\n");
+    Printf(rust_proxy_code, "pub struct %sDirectorHandle<T: %sDirector> {\n", sym_name, sym_name);
+    Printf(rust_proxy_code, "  object: *mut c_void,\n");
+    Printf(rust_proxy_code, "  director: Box<T>,\n");
+    Printf(rust_proxy_code, "}\n");
+    Printf(rust_proxy_code, "impl<T: %sDirector> %sDirectorHandle<T> {\n", sym_name, sym_name);
+    Printf(rust_proxy_code, "  pub unsafe fn connect(object: &%s, director: T) -> Self {\n", sym_name);
+    Printf(rust_proxy_code, "    let mut handle = Self { object: object.as_ptr(), director: Box::new(director) };\n");
+    Printf(rust_proxy_code, "    object.connect_director_trait(&mut *handle.director);\n");
+    Printf(rust_proxy_code, "    handle\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub fn director(&self) -> &T {\n");
+    Printf(rust_proxy_code, "    &self.director\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub fn director_mut(&mut self) -> &mut T {\n");
+    Printf(rust_proxy_code, "    &mut self.director\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "}\n");
+    Printf(rust_proxy_code, "impl<T: %sDirector> Drop for %sDirectorHandle<T> {\n", sym_name, sym_name);
+    Printf(rust_proxy_code, "  fn drop(&mut self) {\n");
+    Printf(rust_proxy_code, "    unsafe { %s_raw(self.object); }\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n\n");
 
     Wrapper_print(code_wrap, f_wrappers);
+    Wrapper_print(disconnect_wrap, f_wrappers);
     DelWrapper(code_wrap);
+    DelWrapper(disconnect_wrap);
 
     Delete(rust_connect_params);
     Delete(rust_connect_args);
+    Delete(rust_trait_args);
     Delete(norm_name);
     Delete(dirclassname);
     Delete(swig_director_connect);
+    Delete(swig_director_disconnect);
     Delete(wname);
+    Delete(disconnect_wname);
   }
 
   String *rustReturnType(Node *n, SwigType *returntype) {

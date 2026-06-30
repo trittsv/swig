@@ -345,6 +345,10 @@ jobs:
           CPPSTD: c++17
           GCC: 13
           os: ubuntu-24.04
+        - SWIGLANG: rust
+          CPPSTD: c++17
+          GCC: 13
+          os: ubuntu-24.04
         - SWIGLANG: go
           VER: '1.20'
           CPPSTD: c++17

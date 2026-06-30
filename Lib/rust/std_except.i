@@ -11,6 +11,14 @@
 #include <stdexcept>
 %}
 
+#ifndef SWIG_RUST_THROW_OUT_OF_RANGE
+#if __cplusplus >= 201703L
+#define SWIG_RUST_THROW_OUT_OF_RANGE noexcept(false)
+#else
+#define SWIG_RUST_THROW_OUT_OF_RANGE throw (std::out_of_range)
+#endif
+#endif
+
 namespace std
 {
   %ignore exception;
@@ -29,4 +37,3 @@ namespace std
 %typemap(throws, canthrow=1) std::range_error       "SWIG_RustSetPendingException($1.what());\n return $null;"
 %typemap(throws, canthrow=1) std::runtime_error     "SWIG_RustSetPendingException($1.what());\n return $null;"
 %typemap(throws, canthrow=1) std::underflow_error   "SWIG_RustSetPendingException($1.what());\n return $null;"
-

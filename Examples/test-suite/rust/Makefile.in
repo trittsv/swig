@@ -20,13 +20,38 @@ RUST_C_TEST_CASES = \
 RUST_CPP_TEST_CASES = \
 	cpp_basic \
 	director_minimal \
+	rust_director_advanced \
+	rust_argcargv \
+	rust_arrays \
+	rust_boost_intrusive_ptr \
+	rust_boost_shared_ptr \
+	rust_std_array \
+	rust_std_deque \
 	rust_std_except \
+	rust_std_list \
+	rust_std_map \
+	rust_std_pair \
+	rust_std_set \
+	rust_std_shared_ptr \
 	rust_std_string \
+	rust_std_unique_ptr \
 	rust_std_vector \
+	rust_std_wstring \
+	rust_swiginterface \
+	rust_swigmove \
+	rust_wchar \
+
+RUST_CPP17_TEST_CASES = \
+	rust_std_optional \
+	rust_std_string_view \
 
 ERROR_TEST_CASES = \
 	$(RUST_CPP_TEST_CASES:=.cpptest) \
 	$(RUST_C_TEST_CASES:=.ctest)
+
+ifneq (,$(findstring c++17,$(CXXFLAGS)))
+ERROR_TEST_CASES += $(RUST_CPP17_TEST_CASES:=.cpptest)
+endif
 
 include $(srcdir)/../common.mk
 
@@ -34,7 +59,7 @@ C_TEST_CASES := $(RUST_C_TEST_CASES)
 CPP_TEST_CASES := $(RUST_CPP_TEST_CASES)
 CPP11_TEST_CASES :=
 CPP14_TEST_CASES :=
-CPP17_TEST_CASES :=
+CPP17_TEST_CASES := $(RUST_CPP17_TEST_CASES)
 CPP20_TEST_CASES :=
 MULTI_CPP_TEST_CASES :=
 

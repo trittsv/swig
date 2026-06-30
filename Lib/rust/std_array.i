@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
- * std_vector.i
+ * std_array.i
  *
- * Minimal std::vector<T> wrapper support for Rust.
+ * std::array<T, N> wrapper support for Rust.
  * ----------------------------------------------------------------------------- */
 
 %{
+#include <array>
 #include <stdexcept>
-#include <vector>
 %}
 
 %include <std_except.i>
 
 namespace std {
 
-template<class T> class vector {
+template<class T, size_t N> class array {
 public:
   typedef size_t size_type;
   typedef ptrdiff_t difference_type;
@@ -23,24 +23,15 @@ public:
   typedef value_type &reference;
   typedef const value_type &const_reference;
 
-  vector();
-  vector(const vector &other);
+  array();
+  array(const array &other);
 
-  void clear();
-  void push_back(const T &x);
   size_type size() const;
   bool empty() const;
-  size_type capacity() const;
-  void reserve(size_type n);
+  void fill(const T &value);
 
   %extend {
     T getitemcopy(int index) SWIG_RUST_THROW_OUT_OF_RANGE {
-      if (index >= 0 && index < (int)$self->size())
-        return (*$self)[index];
-      throw std::out_of_range("index");
-    }
-
-    const T &getitem(int index) SWIG_RUST_THROW_OUT_OF_RANGE {
       if (index >= 0 && index < (int)$self->size())
         return (*$self)[index];
       throw std::out_of_range("index");

@@ -19,6 +19,12 @@ Version 4.5.0 (in progress)
             the C# director implementation, including directorin/directorout
             typemaps, director argument output hooks, director callback metadata,
             proxy ownership/disown support and a runtime director test.
+            Rust directors also generate trait based callback shims,
+            connect/disconnect helpers and a director handle for keeping Rust
+            callback implementations alive while C++ director callbacks are
+            connected. Overloaded director methods use SWIG overload suffixes in
+            the Rust trait so that Rust can represent each C++ overload
+            unambiguously.
             Rust now also provides typemap-driven wrapper generation with
             Rust-specific rusttype/rustin/rustout typemaps, pointer/reference
             typemaps in typemaps.i and initial std_string.i, std_vector.i and
@@ -28,6 +34,10 @@ Version 4.5.0 (in progress)
             panics via the generated pending-exception bridge. The Rust
             test-suite is also enabled in Linux GitHub Actions, including
             default, C++11 and C++14 builds.
+            Rust standard library coverage now includes tests for the newly
+            added array, deque, list, map, optional, pair, set, string_view,
+            smart pointer, wchar and argv typemaps, with a C++17 Rust CI build
+            covering optional and string_view.
 
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs

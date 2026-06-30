@@ -197,16 +197,17 @@ inline void deliver(Receiver *receiver, int value) {
 For a class named <tt>Receiver</tt>, the generated Rust file contains an opaque
 <tt>Receiver</tt> proxy struct, callback type aliases such as
 <tt>ReceiverCallback0</tt>, a <tt>ReceiverDirector</tt> trait describing the
-callbacks, and a <tt>Receiver::connect_director</tt> method. The Rust callback
-receives the opaque Rust object pointer that was passed to
-<tt>connect_director</tt>.
+callbacks, a raw <tt>Receiver::connect_director</tt> method, a typed
+<tt>Receiver::connect_director_trait</tt> helper and a
+<tt>ReceiverDirectorHandle</tt> helper which keeps the Rust callback object
+alive and disconnects the director when the handle is dropped.
 </p>
 
 <div class="targetlang">
 <pre>
 mod messages;
 
-use std::ffi::c_void;
+use messages::ReceiverDirectorHandle;
 use std::os::raw::c_int;
 
 struct MyReceiver {
@@ -219,24 +220,16 @@ impl messages::ReceiverDirector for MyReceiver {
     }
 }
 
-extern "C" fn receiver_message(obj: *mut c_void, value: c_int) {
-    unsafe {
-        (*(obj as *mut MyReceiver)).message(value);
-    }
-}
-
 fn main() {
     unsafe {
-        let mut rust_receiver = MyReceiver { total: 0 };
-
         let receiver = messages::Receiver::new();
-
-        receiver.connect_director(
-            &amp;mut rust_receiver as *mut MyReceiver as *mut c_void,
-            receiver_message,
+        let handle = ReceiverDirectorHandle::connect(
+            &amp;receiver,
+            MyReceiver { total: 0 },
         );
+
         messages::deliver(receiver.as_ptr(), 42);
-        assert_eq!(rust_receiver.total, 42);
+        assert_eq!(handle.director().total, 42);
     }
 }
 </pre>
@@ -245,14 +238,16 @@ fn main() {
 <p>
 The exact callback alias numbers follow the order of director methods emitted
 for the class. For example, the first director method in <tt>Receiver</tt> uses
-<tt>ReceiverCallback0</tt>. The generated C++ wrapper must be compiled as C++,
-and the generated Rust program must link against the shared wrapper library.
-Director method arguments and return values are marshalled through Rust
-<tt>ctype</tt>, <tt>directorin</tt>, <tt>directorout</tt> and
-<tt>directorargout</tt> typemaps, following the same director typemap structure
-used by the C# module. Constructed Rust proxy objects own their C++ object by
-default and release it from <tt>Drop</tt>; use <tt>disown()</tt> or
-<tt>into_raw()</tt> when the C++ side takes ownership.
+<tt>ReceiverCallback0</tt>. The raw <tt>connect_director</tt> method remains
+available for code that wants to provide callback function pointers directly.
+The generated C++ wrapper must be compiled as C++, and the generated Rust
+program must link against the shared wrapper library. Director method arguments
+and return values are marshalled through Rust <tt>ctype</tt>,
+<tt>directorin</tt>, <tt>directorout</tt>, <tt>directorargout</tt>,
+<tt>rustdirectorin</tt> and <tt>rustdirectorout</tt> typemaps, following the
+same director typemap structure used by the C# module. Constructed Rust proxy
+objects own their C++ object by default and release it from <tt>Drop</tt>; use
+<tt>disown()</tt> or <tt>into_raw()</tt> when the C++ side takes ownership.
 </p>
 
 </body>

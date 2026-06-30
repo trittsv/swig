@@ -1,7 +1,6 @@
 mod director_minimal;
 
-use director_minimal::MinimalDirector;
-use std::ffi::c_void;
+use director_minimal::MinimalDirectorHandle;
 
 struct MyMinimal {
     calls: usize,
@@ -14,24 +13,16 @@ impl director_minimal::MinimalDirector for MyMinimal {
     }
 }
 
-extern "C" fn minimal_run(obj: *mut c_void) -> bool {
-    unsafe { (*(obj as *mut MyMinimal)).run() }
-}
-
 fn main() {
     unsafe {
-        let mut rust_minimal = MyMinimal { calls: 0 };
         let minimal = director_minimal::Minimal::new();
+        let handle = MinimalDirectorHandle::connect(&minimal, MyMinimal { calls: 0 });
 
-        minimal.connect_director(
-            &mut rust_minimal as *mut MyMinimal as *mut c_void,
-            minimal_run,
-        );
         if !minimal.get() {
             panic!("expected director override to return true");
         }
-        if rust_minimal.calls != 1 {
-            panic!("expected one director call, got {}", rust_minimal.calls);
+        if handle.director().calls != 1 {
+            panic!("expected one director call, got {}", handle.director().calls);
         }
     }
 }
