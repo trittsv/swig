@@ -64,6 +64,9 @@ Version 4.5.0 (in progress)
             The low-level raw director connect path is kept inside the
             generated module, while unsafe disown/reclaim helpers cover
             intentional manual lifetime management.
+            Rust now supports %pragma(rust) customization for module imports,
+            module code, extern block attributes/code, proxy class attributes,
+            proxy derives, proxy impl code and generated visibility.
 
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs

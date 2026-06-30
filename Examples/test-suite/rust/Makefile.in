@@ -22,6 +22,7 @@ RUST_CPP_TEST_CASES = \
 	director_minimal \
 	rust_director_advanced \
 	rust_director_create_callback \
+	rust_pragmas \
 	rust_variables \
 	rust_argcargv \
 	rust_arrays \

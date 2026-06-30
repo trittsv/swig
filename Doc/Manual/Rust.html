@@ -13,6 +13,7 @@
 <li><a href="#Rust_introduction">Introduction</a>
 <li><a href="#Rust_commandline">Additional command line options</a>
 <li><a href="#Rust_simple_example">Simple example</a>
+<li><a href="#Rust_pragmas">Pragmas</a>
 <li><a href="#Rust_directors">Directors</a>
 </ul>
 </div>
@@ -158,7 +159,58 @@ configuring SWIG with Rust enabled. The Linux GitHub Actions workflow also runs
 the Rust examples and test-suite for the default compiler mode, C++11 and C++14.
 </p>
 
-<H2><a name="Rust_directors">40.4 Directors</a></H2>
+<H2><a name="Rust_pragmas">40.4 Pragmas</a></H2>
+
+
+<p>
+The Rust module supports <tt>%pragma(rust)</tt> customization points modelled
+after the C# module's pragma mechanism. The following pragmas are copied into
+the generated Rust file:
+</p>
+
+<div class="code">
+<pre>
+%pragma(rust) moduleimports=%{
+use std::os::raw::c_int as MyInt;
+%}
+
+%pragma(rust) modulecode=%{
+pub const MODULE_MARKER: MyInt = 10;
+%}
+
+%pragma(rust) externattributes=%{
+#[allow(improper_ctypes)]
+%}
+
+%pragma(rust) externcode=%{
+  pub fn extra_c_symbol(input: MyInt) -&gt; MyInt;
+%}
+
+%pragma(rust) classattributes=%{
+#[repr(C)]
+%}
+
+%pragma(rust) classderive="Debug"
+
+%pragma(rust) classcode=%{
+  pub fn marker(&amp;self) -&gt; MyInt {
+    MODULE_MARKER
+  }
+%}
+
+%pragma(rust) visibility="pub"
+</pre>
+</div>
+
+<p>
+<tt>moduleimports</tt> and <tt>modulecode</tt> are emitted at module scope.
+<tt>externattributes</tt> and <tt>externcode</tt> customize the generated
+<tt>extern "C"</tt> block. <tt>classattributes</tt>, <tt>classderive</tt> and
+<tt>classcode</tt> are applied to generated proxy classes. <tt>visibility</tt>
+sets the visibility token used for generated proxy classes and constants.
+</p>
+
+<H2><a name="Rust_directors">40.5 Directors</a></H2>
 
 
 <p>

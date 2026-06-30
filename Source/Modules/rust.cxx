@@ -34,6 +34,14 @@ class RUST : public Language {
   String *crate_name;
   String *rust_extern_code;
   String *rust_proxy_code;
+  String *rust_module_imports;
+  String *rust_module_code;
+  String *rust_extern_attributes;
+  String *rust_extern_pragmas;
+  String *rust_class_attributes;
+  String *rust_class_derives;
+  String *rust_class_code;
+  String *rust_visibility;
   String *proxy_class_name;
   String *proxy_class_code;
   String *destructor_call;
@@ -68,6 +76,14 @@ public:
     crate_name(NULL),
     rust_extern_code(NULL),
     rust_proxy_code(NULL),
+    rust_module_imports(NULL),
+    rust_module_code(NULL),
+    rust_extern_attributes(NULL),
+    rust_extern_pragmas(NULL),
+    rust_class_attributes(NULL),
+    rust_class_derives(NULL),
+    rust_class_code(NULL),
+    rust_visibility(NULL),
     proxy_class_name(NULL),
     proxy_class_code(NULL),
     destructor_call(NULL),
@@ -167,6 +183,14 @@ public:
     f_directors_h = NewString("");
     rust_extern_code = NewString("");
     rust_proxy_code = NewString("");
+    rust_module_imports = NewString("");
+    rust_module_code = NewString("");
+    rust_extern_attributes = NewString("");
+    rust_extern_pragmas = NewString("");
+    rust_class_attributes = NewString("");
+    rust_class_derives = NewString("");
+    rust_class_code = NewString("");
+    rust_visibility = NewString("pub");
     dmethods_seq = NewList();
     dmethods_table = NewHash();
     n_dmethods = 0;
@@ -250,20 +274,6 @@ public:
     Printf(f_wrappers, "  return kind;\n");
     Printf(f_wrappers, "}\n\n");
 
-    Swig_banner_target_lang(f_rust, "//");
-    Printf(f_rust, "\n");
-    Printf(f_rust, "#![allow(dead_code)]\n");
-    Printf(f_rust, "#![allow(non_camel_case_types)]\n");
-    Printf(f_rust, "#![allow(non_snake_case)]\n");
-    Printf(f_rust, "#![allow(non_upper_case_globals)]\n");
-    Printf(f_rust, "#![allow(path_statements)]\n");
-    Printf(f_rust, "#![allow(unused_imports)]\n\n");
-    Printf(f_rust,
-           "use std::os::raw::{c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short, c_uchar, c_uint, c_ulong, "
-           "c_ulonglong, c_ushort, c_void};\n\n");
-    Printf(f_rust, "// Rust bindings for the '%s' SWIG module.\n", crate_name);
-    Printf(f_rust, "// Link the generated wrapper library from your Rust build, for example with\n");
-    Printf(f_rust, "// 'cargo:rustc-link-lib=dylib=%s'.\n\n", module_name);
     Printf(rust_extern_code, "  #[link_name = \"Rust_string_free\"]\n");
     Printf(rust_extern_code, "  pub fn Rust_string_free_raw(s: *mut c_char);\n");
     Printf(rust_extern_code, "  #[link_name = \"Rust_take_exception\"]\n");
@@ -288,7 +298,27 @@ public:
       Printf(f_runtime_h, "\n#endif\n");
     }
 
+    Swig_banner_target_lang(f_rust, "//");
+    Printf(f_rust, "\n");
+    Printf(f_rust, "#![allow(dead_code)]\n");
+    Printf(f_rust, "#![allow(non_camel_case_types)]\n");
+    Printf(f_rust, "#![allow(non_snake_case)]\n");
+    Printf(f_rust, "#![allow(non_upper_case_globals)]\n");
+    Printf(f_rust, "#![allow(path_statements)]\n");
+    Printf(f_rust, "#![allow(unused_imports)]\n\n");
+    Printf(f_rust,
+           "use std::os::raw::{c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short, c_uchar, c_uint, c_ulong, "
+           "c_ulonglong, c_ushort, c_void};\n");
+    Dump(rust_module_imports, f_rust);
+    Printf(f_rust, "\n// Rust bindings for the '%s' SWIG module.\n", crate_name);
+    Printf(f_rust, "// Link the generated wrapper library from your Rust build, for example with\n");
+    Printf(f_rust, "// 'cargo:rustc-link-lib=dylib=%s'.\n\n", module_name);
+    Dump(rust_module_code, f_rust);
+    if (Len(rust_module_code))
+      Printf(f_rust, "\n");
+    Dump(rust_extern_attributes, f_rust);
     Printf(f_rust, "extern \"C\" {\n");
+    Dump(rust_extern_pragmas, f_rust);
     Dump(rust_extern_code, f_rust);
     Printf(f_rust, "}\n");
     Printf(f_rust, "\n#[derive(Clone, Debug, Eq, PartialEq)]\n");
@@ -353,6 +383,14 @@ public:
     Delete(crate_name);
     Delete(rust_extern_code);
     Delete(rust_proxy_code);
+    Delete(rust_module_imports);
+    Delete(rust_module_code);
+    Delete(rust_extern_attributes);
+    Delete(rust_extern_pragmas);
+    Delete(rust_class_attributes);
+    Delete(rust_class_derives);
+    Delete(rust_class_code);
+    Delete(rust_visibility);
     Delete(proxy_class_name);
     Delete(proxy_class_code);
     Delete(destructor_call);
@@ -371,6 +409,14 @@ public:
     crate_name = NULL;
     rust_extern_code = NULL;
     rust_proxy_code = NULL;
+    rust_module_imports = NULL;
+    rust_module_code = NULL;
+    rust_extern_attributes = NULL;
+    rust_extern_pragmas = NULL;
+    rust_class_attributes = NULL;
+    rust_class_derives = NULL;
+    rust_class_code = NULL;
+    rust_visibility = NULL;
     proxy_class_name = NULL;
     proxy_class_code = NULL;
     destructor_call = NULL;
@@ -606,7 +652,7 @@ public:
         Delete(prefix);
       } else {
         String *rust_name = rustIdentifier(symname);
-        Printf(f_rust, "pub const %s: %s = %s;\n", rust_name, rust_type, value);
+        Printf(rust_proxy_code, "%s const %s: %s = %s;\n", rust_visibility, rust_name, rust_type, value);
         Delete(rust_name);
       }
     } else {
@@ -615,6 +661,43 @@ public:
 
     Delete(rust_type);
     return SWIG_OK;
+  }
+
+  virtual int pragmaDirective(Node *n) {
+    if (!ImportMode) {
+      String *lang = Getattr(n, "lang");
+      String *code = Getattr(n, "name");
+      String *value = Getattr(n, "value");
+
+      if (Strcmp(lang, "rust") == 0) {
+        String *strvalue = NewString(value);
+        Replaceall(strvalue, "\\\"", "\"");
+
+        if (Strcmp(code, "moduleimports") == 0) {
+          Printf(rust_module_imports, "%s\n", strvalue);
+        } else if (Strcmp(code, "modulecode") == 0) {
+          Printf(rust_module_code, "%s\n", strvalue);
+        } else if (Strcmp(code, "externattributes") == 0) {
+          Printf(rust_extern_attributes, "%s\n", strvalue);
+        } else if (Strcmp(code, "externcode") == 0) {
+          Printf(rust_extern_pragmas, "%s\n", strvalue);
+        } else if (Strcmp(code, "classattributes") == 0) {
+          Printf(rust_class_attributes, "%s\n", strvalue);
+        } else if (Strcmp(code, "classderive") == 0) {
+          Delete(rust_class_derives);
+          rust_class_derives = Copy(strvalue);
+        } else if (Strcmp(code, "classcode") == 0) {
+          Printf(rust_class_code, "%s\n", strvalue);
+        } else if (Strcmp(code, "visibility") == 0) {
+          Delete(rust_visibility);
+          rust_visibility = Copy(strvalue);
+        } else {
+          Swig_error(input_file, line_number, "Unrecognized pragma.\n");
+        }
+        Delete(strvalue);
+      }
+    }
+    return Language::pragmaDirective(n);
   }
 
   virtual int variableWrapper(Node *n) {
@@ -661,7 +744,10 @@ public:
     int result = Language::classHandler(n);
 
     if (classname) {
-      Printf(rust_proxy_code, "pub struct %s {\n", classname);
+      Dump(rust_class_attributes, rust_proxy_code);
+      if (Len(rust_class_derives))
+        Printf(rust_proxy_code, "#[derive(%s)]\n", rust_class_derives);
+      Printf(rust_proxy_code, "%s struct %s {\n", rust_visibility, classname);
       Printf(rust_proxy_code, "  ptr: *mut c_void,\n");
       Printf(rust_proxy_code, "  owned: bool,\n");
       Printf(rust_proxy_code, "}\n\n");
@@ -702,6 +788,7 @@ public:
         Printf(rust_proxy_code, "  }\n");
       }
       Printv(rust_proxy_code, proxy_class_code, NIL);
+      Dump(rust_class_code, rust_proxy_code);
       Printf(rust_proxy_code, "}\n\n");
       if (Len(destructor_call) > 0) {
         Printf(rust_proxy_code, "impl Drop for %s {\n", classname);
