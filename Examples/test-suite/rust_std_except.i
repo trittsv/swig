@@ -5,7 +5,7 @@
 %inline %{
 #include <stdexcept>
 
-#if __cplusplus >= 201703L
+#if __cplusplus >= 201103L
 #define SWIG_RUST_THROW_OUT_OF_RANGE noexcept(false)
 #else
 #define SWIG_RUST_THROW_OUT_OF_RANGE throw (std::out_of_range)

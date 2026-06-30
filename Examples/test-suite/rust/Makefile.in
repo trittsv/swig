@@ -21,6 +21,7 @@ RUST_CPP_TEST_CASES = \
 	cpp_basic \
 	director_minimal \
 	rust_director_advanced \
+	rust_director_create_callback \
 	rust_argcargv \
 	rust_arrays \
 	rust_boost_intrusive_ptr \
