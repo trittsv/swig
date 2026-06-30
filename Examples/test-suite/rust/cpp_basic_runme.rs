@@ -7,12 +7,12 @@ fn check(got: i32, expected: i32) {
 }
 
 fn main() {
-    unsafe {
-        let foo = cpp_basic::Foo::new(7);
-        check(foo.func1(3), 42);
-        check(foo.func2(3), -21);
+    let foo = cpp_basic::Foo::new(7);
+    check(foo.func1(3), 42);
+    check(foo.func2(3), -21);
 
-        let bar = cpp_basic::Bar::new();
+    let bar = cpp_basic::Bar::new();
+    unsafe {
         check(bar.test(5, foo.as_ptr()), 27);
     }
 }

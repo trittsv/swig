@@ -14,15 +14,13 @@ impl director_minimal::MinimalDirector for MyMinimal {
 }
 
 fn main() {
-    unsafe {
-        let minimal = director_minimal::Minimal::new();
-        let handle = MinimalDirectorHandle::connect(&minimal, MyMinimal { calls: 0 });
+    let minimal = director_minimal::Minimal::new();
+    let handle = unsafe { MinimalDirectorHandle::connect(&minimal, MyMinimal { calls: 0 }) };
 
-        if !minimal.get() {
-            panic!("expected director override to return true");
-        }
-        if handle.director().calls != 1 {
-            panic!("expected one director call, got {}", handle.director().calls);
-        }
+    if !minimal.get() {
+        panic!("expected director override to return true");
+    }
+    if handle.director().calls != 1 {
+        panic!("expected one director call, got {}", handle.director().calls);
     }
 }

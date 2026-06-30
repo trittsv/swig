@@ -1,7 +1,6 @@
 mod rust_std_except;
 
 fn main() {
-  unsafe {
     if rust_std_except::rust_no_throw() != 7 {
       panic!("rust_no_throw failed");
     }
@@ -12,6 +11,4 @@ fn main() {
     if thrown.is_ok() {
       panic!("std::out_of_range was not translated into a Rust panic");
     }
-  }
 }
-

@@ -41,6 +41,10 @@ Version 4.5.0 (in progress)
             Rust proxy constructors now expose default constructors as new()
             and compact names such as new_1() for additional overloads instead
             of leaking SWIG overload suffixes into the Rust API.
+            Rust proxy methods, constructors and module functions are now
+            generated as safe Rust functions when their public Rust signature
+            does not expose raw pointers. Raw pointer APIs, manual ownership
+            entry points and director connection hooks remain unsafe.
 
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs

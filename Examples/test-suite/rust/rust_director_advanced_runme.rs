@@ -31,38 +31,36 @@ impl AdvancedDirector for MyAdvanced {
 }
 
 fn main() {
-    unsafe {
-        let advanced = rust_director_advanced::Advanced::new();
-        {
-            let mut handle = AdvancedDirectorHandle::connect(&advanced, MyAdvanced { total: 0 });
+    let advanced = rust_director_advanced::Advanced::new();
+    {
+        let mut handle = unsafe { AdvancedDirectorHandle::connect(&advanced, MyAdvanced { total: 0 }) };
 
-            if rust_director_advanced::AdvancedDirectorMethodTypes0 != ["c_int"] {
-                panic!("unexpected director method metadata");
-            }
-            if advanced.call_transform(4) != 12 {
-                panic!("expected rustdirectorin/rustdirectorout conversion for transform");
-            }
-            if handle.director().total != 5 {
-                panic!("expected transformed input in Rust director");
-            }
-            if advanced.call_overloaded_one(2) != 105 {
-                panic!("expected one-argument overload dispatch");
-            }
-            if advanced.call_overloaded_two(1, 2) != 25 {
-                panic!("expected two-argument overload dispatch");
-            }
-            if advanced.call_pure(3) != 13 {
-                panic!("expected pure virtual director dispatch");
-            }
-
-            advanced.call_record(10);
-            if handle.director_mut().total != 16 {
-                panic!("expected void director callback to update state");
-            }
+        if rust_director_advanced::AdvancedDirectorMethodTypes0 != ["c_int"] {
+            panic!("unexpected director method metadata");
+        }
+        if advanced.call_transform(4) != 12 {
+            panic!("expected rustdirectorin/rustdirectorout conversion for transform");
+        }
+        if handle.director().total != 5 {
+            panic!("expected transformed input in Rust director");
+        }
+        if advanced.call_overloaded_one(2) != 105 {
+            panic!("expected one-argument overload dispatch");
+        }
+        if advanced.call_overloaded_two(1, 2) != 25 {
+            panic!("expected two-argument overload dispatch");
+        }
+        if advanced.call_pure(3) != 13 {
+            panic!("expected pure virtual director dispatch");
         }
 
-        if advanced.call_transform(4) != 4 {
-            panic!("expected handle drop to disconnect the director");
+        advanced.call_record(10);
+        if handle.director_mut().total != 16 {
+            panic!("expected void director callback to update state");
         }
+    }
+
+    if advanced.call_transform(4) != 4 {
+        panic!("expected handle drop to disconnect the director");
     }
 }

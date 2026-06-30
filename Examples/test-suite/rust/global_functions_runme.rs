@@ -7,9 +7,7 @@ fn check(got: i32, expected: i32) {
 }
 
 fn main() {
-    unsafe {
-        global_functions::global_void();
-        check(global_functions::global_one(1), 1);
-        check(global_functions::global_two(2, 2), 4);
-    }
+    global_functions::global_void();
+    check(global_functions::global_one(1), 1);
+    check(global_functions::global_two(2, 2), 4);
 }

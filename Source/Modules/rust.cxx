@@ -272,12 +272,14 @@ public:
     Printf(f_rust, "extern \"C\" {\n");
     Dump(rust_extern_code, f_rust);
     Printf(f_rust, "}\n");
-    Printf(f_rust, "\nunsafe fn rust_check_exception() {\n");
-    Printf(f_rust, "  let message = Rust_take_exception_raw();\n");
-    Printf(f_rust, "  if !message.is_null() {\n");
-    Printf(f_rust, "    let text = std::ffi::CStr::from_ptr(message).to_string_lossy().into_owned();\n");
-    Printf(f_rust, "    Rust_string_free_raw(message);\n");
-    Printf(f_rust, "    panic!(\"{}\", text);\n");
+    Printf(f_rust, "\nfn rust_check_exception() {\n");
+    Printf(f_rust, "  unsafe {\n");
+    Printf(f_rust, "    let message = Rust_take_exception_raw();\n");
+    Printf(f_rust, "    if !message.is_null() {\n");
+    Printf(f_rust, "      let text = std::ffi::CStr::from_ptr(message).to_string_lossy().into_owned();\n");
+    Printf(f_rust, "      Rust_string_free_raw(message);\n");
+    Printf(f_rust, "      panic!(\"{}\", text);\n");
+    Printf(f_rust, "    }\n");
     Printf(f_rust, "  }\n");
     Printf(f_rust, "}\n\n");
     Dump(rust_proxy_code, f_rust);
@@ -1453,6 +1455,11 @@ private:
     return constructor_name;
   }
 
+  bool rustSignatureNeedsUnsafe(String *rust_params, String *rust_return) const {
+    return (rust_params && (Strstr(rust_params, "*mut ") || Strstr(rust_params, "*const "))) ||
+           (rust_return && (Strstr(rust_return, "*mut ") || Strstr(rust_return, "*const ")));
+  }
+
   void emitProxyFunction(Node *n, bool is_static) {
     if (!proxy_class_code || Getattr(n, "overload:ignore") || GetFlag(n, "explicitcall"))
       return;
@@ -1471,7 +1478,8 @@ private:
 
     buildRustProxyParameters(n, parms, rust_params, rust_pre_code, rust_args);
 
-    Printf(proxy_class_code, "  pub unsafe fn %s(", method_name);
+    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, rust_return);
+    Printf(proxy_class_code, "  pub %sfn %s(", needs_unsafe ? "unsafe " : "", method_name);
     if (!is_static)
       Printf(proxy_class_code, "&self");
     if (Len(rust_params)) {
@@ -1483,6 +1491,8 @@ private:
     if (Cmp(rust_return, "()") != 0)
       Printf(proxy_class_code, " -> %s", rust_return);
     Printf(proxy_class_code, " {\n");
+    if (!needs_unsafe)
+      Printf(proxy_class_code, "    unsafe {\n");
     Printv(proxy_class_code, rust_pre_code, NIL);
     Printf(rust_call, "%s(", wrapper_name);
     if (!is_static)
@@ -1493,8 +1503,10 @@ private:
       Printv(rust_call, rust_args, NIL);
     }
     Printf(rust_call, ")");
-    rust_body = rustOutCode(n, rust_call, "    ");
+    rust_body = rustOutCode(n, rust_call, needs_unsafe ? "    " : "      ");
     Printv(proxy_class_code, rust_body, NIL);
+    if (!needs_unsafe)
+      Printf(proxy_class_code, "    }\n");
     Printf(proxy_class_code, "  }\n");
 
     Delete(rust_body);
@@ -1522,11 +1534,16 @@ private:
 
     buildRustProxyParameters(n, parms, rust_params, rust_pre_code, rust_args);
 
-    Printf(proxy_class_code, "  pub unsafe fn %s(%s) -> Self {\n", constructor_name, rust_params);
+    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, 0);
+    Printf(proxy_class_code, "  pub %sfn %s(%s) -> Self {\n", needs_unsafe ? "unsafe " : "", constructor_name, rust_params);
+    if (!needs_unsafe)
+      Printf(proxy_class_code, "    unsafe {\n");
     Printv(proxy_class_code, rust_pre_code, NIL);
-    Printf(proxy_class_code, "    let swig_result = %s(%s);\n", wrapper_name, rust_args);
-    Printf(proxy_class_code, "    rust_check_exception();\n");
-    Printf(proxy_class_code, "    Self::from_raw_owned(swig_result, true)\n");
+    Printf(proxy_class_code, "%slet swig_result = %s(%s);\n", needs_unsafe ? "    " : "      ", wrapper_name, rust_args);
+    Printf(proxy_class_code, "%srust_check_exception();\n", needs_unsafe ? "    " : "      ");
+    Printf(proxy_class_code, "%sSelf::from_raw_owned(swig_result, true)\n", needs_unsafe ? "    " : "      ");
+    if (!needs_unsafe)
+      Printf(proxy_class_code, "    }\n");
     Printf(proxy_class_code, "  }\n");
 
     Delete(rust_args);
@@ -1784,14 +1801,19 @@ private:
       Printf(rust_extern_code, " -> %s", raw_return);
     Printf(rust_extern_code, ";\n");
 
-    Printf(rust_proxy_code, "pub unsafe fn %s(%s)", public_rust_name, rust_params);
+    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, rust_return);
+    Printf(rust_proxy_code, "pub %sfn %s(%s)", needs_unsafe ? "unsafe " : "", public_rust_name, rust_params);
     if (Cmp(rust_return, "()") != 0)
       Printf(rust_proxy_code, " -> %s", rust_return);
     Printf(rust_proxy_code, " {\n");
+    if (!needs_unsafe)
+      Printf(rust_proxy_code, "  unsafe {\n");
     Printv(rust_proxy_code, rust_pre_code, NIL);
     String *imcall = NewStringf("%s_raw(%s)", rust_name, rust_args);
-    String *body = rustOutCode(n, imcall, "  ");
+    String *body = rustOutCode(n, imcall, needs_unsafe ? "  " : "    ");
     Printv(rust_proxy_code, body, NIL);
+    if (!needs_unsafe)
+      Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n\n");
     Delete(body);
     Delete(imcall);
