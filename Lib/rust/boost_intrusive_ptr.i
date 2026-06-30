@@ -20,6 +20,6 @@ template<class T> class intrusive_ptr {
 %typemap(rustout) boost::intrusive_ptr<TYPE > {
   let ptr = $imcall;
   rust_check_exception();
-  TYPE::from_raw_owned(ptr, true)
+  TYPE::from_raw_owned_unchecked(ptr, true)
 }
 %enddef

@@ -50,6 +50,10 @@ Version 4.5.0 (in progress)
             returns wrapped class pointers as Option<T>, and returns wrapped
             class values/references as proxy objects while keeping the raw C
             ABI declarations internal to the generated module.
+            Rust proxy objects now store non-null pointers and explicit
+            RustOwnership state, expose ownership/is_owned/is_borrowed helpers,
+            reject null raw pointer construction and keep nullable C++ pointer
+            returns represented as Option<T>.
             Rust exception handling now generates a structured RustException
             containing the C++ exception kind and message, together with try_
             function and method wrappers that return Result<T, RustException>.

@@ -13,6 +13,7 @@
 <li><a href="#Rust_introduction">Introduction</a>
 <li><a href="#Rust_commandline">Additional command line options</a>
 <li><a href="#Rust_simple_example">Simple example</a>
+<li><a href="#Rust_ownership">Ownership and nullability</a>
 <li><a href="#Rust_pragmas">Pragmas</a>
 <li><a href="#Rust_directors">Directors</a>
 </ul>
@@ -159,7 +160,30 @@ configuring SWIG with Rust enabled. The Linux GitHub Actions workflow also runs
 the Rust examples and test-suite for the default compiler mode, C++11 and C++14.
 </p>
 
-<H2><a name="Rust_pragmas">40.4 Pragmas</a></H2>
+<H2><a name="Rust_ownership">40.4 Ownership and nullability</a></H2>
+
+
+<p>
+Generated Rust proxy classes store C++ object pointers as
+<tt>std::ptr::NonNull&lt;c_void&gt;</tt> together with a
+<tt>RustOwnership</tt> value. A proxy object therefore cannot contain a null
+pointer. C++ pointer return values are represented as <tt>Option&lt;T&gt;</tt>,
+so a null C++ pointer becomes <tt>None</tt>. References and value returns are
+converted to non-null proxies and panic if the C++ wrapper unexpectedly returns
+null.
+</p>
+
+<p>
+Owned proxies delete the wrapped C++ object from <tt>Drop</tt>. Borrowed
+proxies never delete the wrapped object. Generated proxy classes provide
+<tt>ownership()</tt>, <tt>is_owned()</tt>, <tt>is_borrowed()</tt>,
+<tt>borrow_proxy()</tt>, <tt>disown()</tt> and <tt>into_raw()</tt> to make the
+ownership transition explicit. Raw pointer construction remains unsafe and uses
+<tt>from_raw()</tt>, <tt>borrowed()</tt> or <tt>from_raw_owned()</tt>, each of
+which returns <tt>Option&lt;T&gt;</tt> to reject null pointers.
+</p>
+
+<H2><a name="Rust_pragmas">40.5 Pragmas</a></H2>
 
 
 <p>
@@ -210,7 +234,7 @@ pub const MODULE_MARKER: MyInt = 10;
 sets the visibility token used for generated proxy classes and constants.
 </p>
 
-<H2><a name="Rust_directors">40.5 Directors</a></H2>
+<H2><a name="Rust_directors">40.6 Directors</a></H2>
 
 
 <p>

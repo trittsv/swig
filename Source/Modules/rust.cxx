@@ -316,6 +316,11 @@ public:
     Dump(rust_module_code, f_rust);
     if (Len(rust_module_code))
       Printf(f_rust, "\n");
+    Printf(f_rust, "#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n");
+    Printf(f_rust, "pub enum RustOwnership {\n");
+    Printf(f_rust, "  Owned,\n");
+    Printf(f_rust, "  Borrowed,\n");
+    Printf(f_rust, "}\n\n");
     Dump(rust_extern_attributes, f_rust);
     Printf(f_rust, "extern \"C\" {\n");
     Dump(rust_extern_pragmas, f_rust);
@@ -748,38 +753,57 @@ public:
       if (Len(rust_class_derives))
         Printf(rust_proxy_code, "#[derive(%s)]\n", rust_class_derives);
       Printf(rust_proxy_code, "%s struct %s {\n", rust_visibility, classname);
-      Printf(rust_proxy_code, "  ptr: *mut c_void,\n");
-      Printf(rust_proxy_code, "  owned: bool,\n");
+      Printf(rust_proxy_code, "  ptr: std::ptr::NonNull<c_void>,\n");
+      Printf(rust_proxy_code, "  ownership: RustOwnership,\n");
       Printf(rust_proxy_code, "}\n\n");
       Printf(rust_proxy_code, "impl %s {\n", classname);
-      Printf(rust_proxy_code, "  pub unsafe fn from_raw(ptr: *mut c_void) -> Self {\n");
+      Printf(rust_proxy_code, "  pub unsafe fn from_raw(ptr: *mut c_void) -> Option<Self> {\n");
       Printf(rust_proxy_code, "    Self::from_raw_owned(ptr, true)\n");
       Printf(rust_proxy_code, "  }\n");
-      Printf(rust_proxy_code, "  pub unsafe fn borrowed(ptr: *mut c_void) -> Self {\n");
+      Printf(rust_proxy_code, "  pub unsafe fn borrowed(ptr: *mut c_void) -> Option<Self> {\n");
       Printf(rust_proxy_code, "    Self::from_raw_owned(ptr, false)\n");
       Printf(rust_proxy_code, "  }\n");
-      Printf(rust_proxy_code, "  pub unsafe fn from_raw_owned(ptr: *mut c_void, owned: bool) -> Self {\n");
-      Printf(rust_proxy_code, "    Self { ptr, owned }\n");
+      Printf(rust_proxy_code, "  pub unsafe fn from_raw_owned(ptr: *mut c_void, owned: bool) -> Option<Self> {\n");
+      Printf(rust_proxy_code, "    std::ptr::NonNull::new(ptr).map(|ptr| Self {\n");
+      Printf(rust_proxy_code, "      ptr,\n");
+      Printf(rust_proxy_code, "      ownership: if owned { RustOwnership::Owned } else { RustOwnership::Borrowed },\n");
+      Printf(rust_proxy_code, "    })\n");
+      Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  unsafe fn from_raw_owned_unchecked(ptr: *mut c_void, owned: bool) -> Self {\n");
+      Printf(rust_proxy_code, "    Self::from_raw_owned(ptr, owned).expect(\"SWIG returned a null pointer for a non-null Rust proxy\")\n");
       Printf(rust_proxy_code, "  }\n");
       Printf(rust_proxy_code, "  pub fn as_ptr(&self) -> *mut c_void {\n");
+      Printf(rust_proxy_code, "    self.ptr.as_ptr()\n");
+      Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  pub fn as_non_null(&self) -> std::ptr::NonNull<c_void> {\n");
       Printf(rust_proxy_code, "    self.ptr\n");
       Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  pub fn ownership(&self) -> RustOwnership {\n");
+      Printf(rust_proxy_code, "    self.ownership\n");
+      Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  pub fn is_owned(&self) -> bool {\n");
+      Printf(rust_proxy_code, "    self.ownership == RustOwnership::Owned\n");
+      Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  pub fn is_borrowed(&self) -> bool {\n");
+      Printf(rust_proxy_code, "    self.ownership == RustOwnership::Borrowed\n");
+      Printf(rust_proxy_code, "  }\n");
+      Printf(rust_proxy_code, "  pub fn borrow_proxy(&self) -> Self {\n");
+      Printf(rust_proxy_code, "    Self { ptr: self.ptr, ownership: RustOwnership::Borrowed }\n");
+      Printf(rust_proxy_code, "  }\n");
       Printf(rust_proxy_code, "  pub fn disown(&mut self) {\n");
-      Printf(rust_proxy_code, "    self.owned = false;\n");
+      Printf(rust_proxy_code, "    self.ownership = RustOwnership::Borrowed;\n");
       Printf(rust_proxy_code, "  }\n");
       Printf(rust_proxy_code, "  pub fn into_raw(mut self) -> *mut c_void {\n");
-      Printf(rust_proxy_code, "    let ptr = self.ptr;\n");
-      Printf(rust_proxy_code, "    self.ptr = std::ptr::null_mut();\n");
-      Printf(rust_proxy_code, "    self.owned = false;\n");
+      Printf(rust_proxy_code, "    let ptr = self.ptr.as_ptr();\n");
+      Printf(rust_proxy_code, "    self.ownership = RustOwnership::Borrowed;\n");
       Printf(rust_proxy_code, "    std::mem::forget(self);\n");
       Printf(rust_proxy_code, "    ptr\n");
       Printf(rust_proxy_code, "  }\n");
       if (Len(destructor_call) > 0) {
         Printf(rust_proxy_code, "  unsafe fn delete_owned(&mut self) {\n");
-        Printf(rust_proxy_code, "    if self.owned && !self.ptr.is_null() {\n");
+        Printf(rust_proxy_code, "    if self.ownership == RustOwnership::Owned {\n");
         Printf(rust_proxy_code, "      %s;\n", destructor_call);
-        Printf(rust_proxy_code, "      self.ptr = std::ptr::null_mut();\n");
-        Printf(rust_proxy_code, "      self.owned = false;\n");
+        Printf(rust_proxy_code, "      self.ownership = RustOwnership::Borrowed;\n");
         Printf(rust_proxy_code, "    }\n");
         Printf(rust_proxy_code, "  }\n");
         Printf(rust_proxy_code, "  pub unsafe fn delete(mut self) {\n");
@@ -838,7 +862,7 @@ public:
     String *symname = Getattr(n, "sym:name");
     if (proxy_class_name && destructor_call) {
       Clear(destructor_call);
-      Printf(destructor_call, "%s_raw(self.ptr)", Swig_name_destroy(getNSpace(), symname));
+      Printf(destructor_call, "%s_raw(self.ptr.as_ptr())", Swig_name_destroy(getNSpace(), symname));
     }
     return SWIG_OK;
   }
@@ -1741,10 +1765,10 @@ private:
       Printf(proxy_class_code, "%sif let Some(error) = rust_take_exception() {\n", needs_unsafe ? "    " : "      ");
       Printf(proxy_class_code, "%s  return Err(error);\n", needs_unsafe ? "    " : "      ");
       Printf(proxy_class_code, "%s}\n", needs_unsafe ? "    " : "      ");
-      Printf(proxy_class_code, "%sOk(Self::from_raw_owned(swig_result, true))\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%sOk(Self::from_raw_owned_unchecked(swig_result, true))\n", needs_unsafe ? "    " : "      ");
     } else {
       Printf(proxy_class_code, "%srust_check_exception();\n", needs_unsafe ? "    " : "      ");
-      Printf(proxy_class_code, "%sSelf::from_raw_owned(swig_result, true)\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%sSelf::from_raw_owned_unchecked(swig_result, true)\n", needs_unsafe ? "    " : "      ");
     }
     if (!needs_unsafe)
       Printf(proxy_class_code, "    }\n");
@@ -2269,12 +2293,12 @@ private:
       Printf(body, "%sif swig_result.is_null() {\n", result_mode ? "" : indent);
       Printf(body, "%s  None\n", indent);
       Printf(body, "%s} else {\n", indent);
-      Printf(body, "%s  Some(%s::from_raw_owned(swig_result, %s))\n", indent, proxy_name, GetFlag(n, "feature:new") ? "true" : "false");
+      Printf(body, "%s  %s::from_raw_owned(swig_result, %s)\n", indent, proxy_name, GetFlag(n, "feature:new") ? "true" : "false");
       Printf(body, "%s}", indent);
     } else if (is_reference) {
-      Printf(body, "%s%s::from_raw_owned(swig_result, false)", result_mode ? "" : indent, proxy_name);
+      Printf(body, "%s%s::from_raw_owned_unchecked(swig_result, false)", result_mode ? "" : indent, proxy_name);
     } else {
-      Printf(body, "%s%s::from_raw_owned(swig_result, true)", result_mode ? "" : indent, proxy_name);
+      Printf(body, "%s%s::from_raw_owned_unchecked(swig_result, true)", result_mode ? "" : indent, proxy_name);
     }
     if (result_mode)
       Printf(body, ")\n");

@@ -32,7 +32,7 @@
   if ptr.is_null() {
     None
   } else {
-    Some(TYPE::from_raw_owned(ptr, true))
+    Some(TYPE::from_raw_owned_unchecked(ptr, true))
   }
 }
 %enddef

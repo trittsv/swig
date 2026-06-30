@@ -26,12 +26,12 @@
 %typemap(rustout) std::unique_ptr<TYPE > {
   let ptr = $imcall;
   rust_check_exception();
-  TYPE::from_raw_owned(ptr, true)
+  TYPE::from_raw_owned_unchecked(ptr, true)
 }
 %typemap(rustout) std::unique_ptr<TYPE > &, std::unique_ptr<TYPE > && {
   let ptr = $imcall;
   rust_check_exception();
-  TYPE::from_raw_owned(ptr, false)
+  TYPE::from_raw_owned_unchecked(ptr, false)
 }
 %template() std::unique_ptr<TYPE >;
 %enddef
