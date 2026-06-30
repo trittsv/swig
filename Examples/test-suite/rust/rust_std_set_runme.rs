@@ -12,10 +12,8 @@ fn main() {
     if values.count(7) != 1 {
         panic!("expected set to contain 7");
     }
-    unsafe {
-        if rust_std_set::rust_std_set_sum(values.as_ptr()) != 9 {
-            panic!("expected set sum 9");
-        }
+    if rust_std_set::rust_std_set_sum(&values) != 9 {
+        panic!("expected set sum 9");
     }
     values.erase(2);
     if values.count(2) != 0 {

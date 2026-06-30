@@ -11,9 +11,7 @@ fn main() {
     if values.getitemcopy(1) != 9 {
         panic!("expected updated array item");
     }
-    unsafe {
-        if rust_std_array::rust_std_array_sum(values.as_ptr()) != 17 {
-            panic!("expected array sum 17");
-        }
+    if rust_std_array::rust_std_array_sum(&values) != 17 {
+        panic!("expected array sum 17");
     }
 }

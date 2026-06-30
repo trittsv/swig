@@ -13,9 +13,7 @@ fn main() {
     if values.getitemcopy(1) != 7 {
         panic!("expected updated deque item");
     }
-    unsafe {
-        if rust_std_deque::rust_std_deque_sum(values.as_ptr()) != 14 {
-            panic!("expected deque sum 14");
-        }
+    if rust_std_deque::rust_std_deque_sum(&values) != 14 {
+        panic!("expected deque sum 14");
     }
 }

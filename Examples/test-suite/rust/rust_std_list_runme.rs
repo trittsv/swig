@@ -9,10 +9,8 @@ fn main() {
     if values.size() != 3 {
         panic!("expected size 3, got {}", values.size());
     }
-    unsafe {
-        if rust_std_list::rust_std_list_sum(values.as_ptr()) != 10 {
-            panic!("expected list sum 10");
-        }
+    if rust_std_list::rust_std_list_sum(&values) != 10 {
+        panic!("expected list sum 10");
     }
     values.reverse();
     values.remove(3);

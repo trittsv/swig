@@ -12,7 +12,5 @@ fn main() {
     check(foo.func2(3), -21);
 
     let bar = cpp_basic::Bar::new();
-    unsafe {
-        check(bar.test(5, foo.as_ptr()), 27);
-    }
+    check(bar.test(5, &foo), 27);
 }

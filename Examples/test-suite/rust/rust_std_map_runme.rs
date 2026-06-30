@@ -11,10 +11,8 @@ fn main() {
     if values.getitem(3) != 30 {
         panic!("expected map value 30");
     }
-    unsafe {
-        if rust_std_map::rust_std_map_sum_values(values.as_ptr()) != 50 {
-            panic!("expected map value sum 50");
-        }
+    if rust_std_map::rust_std_map_sum_values(&values) != 50 {
+        panic!("expected map value sum 50");
     }
     values.erase(2);
     if values.count(2) != 0 {

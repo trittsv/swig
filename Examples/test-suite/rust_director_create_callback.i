@@ -25,6 +25,12 @@ public:
   int dispatch(int message) {
     return receiver ? receiver->receive(message) : -1;
   }
+  MessageReceiver *current() {
+    return receiver;
+  }
+  MessageReceiver &current_ref() {
+    return *receiver;
+  }
   void clear() {
     receiver = 0;
   }

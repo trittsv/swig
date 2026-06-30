@@ -33,7 +33,7 @@ impl AdvancedDirector for MyAdvanced {
 fn main() {
     let advanced = rust_director_advanced::Advanced::new();
     {
-        let mut handle = unsafe { AdvancedDirectorHandle::connect(&advanced, MyAdvanced { total: 0 }) };
+        let mut handle = AdvancedDirectorHandle::connect(&advanced, MyAdvanced { total: 0 });
 
         if rust_director_advanced::AdvancedDirectorMethodTypes0 != ["c_int"] {
             panic!("unexpected director method metadata");
@@ -58,9 +58,27 @@ fn main() {
         if handle.director_mut().total != 16 {
             panic!("expected void director callback to update state");
         }
+
+        handle.disconnect();
+        if handle.is_connected() {
+            panic!("expected explicit director disconnect");
+        }
+        if advanced.call_transform(4) != 4 {
+            panic!("expected explicit disconnect to restore base dispatch");
+        }
     }
 
     if advanced.call_transform(4) != 4 {
         panic!("expected handle drop to disconnect the director");
+    }
+
+    let handle = AdvancedDirectorHandle::connect(&advanced, MyAdvanced { total: 0 });
+    advanced.call_transform(2);
+    let director = handle.into_director();
+    if director.total != 3 {
+        panic!("expected into_director to return callback state");
+    }
+    if advanced.call_transform(4) != 4 {
+        panic!("expected into_director to disconnect");
     }
 }

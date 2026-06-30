@@ -37,6 +37,7 @@ class RUST : public Language {
   String *proxy_class_name;
   String *proxy_class_code;
   String *destructor_call;
+  String *variable_name;
   String *director_callback_typedefs;
   String *director_callbacks;
   String *director_connect_parms;
@@ -48,6 +49,9 @@ class RUST : public Language {
   int n_dmethods;
   int first_class_dmethod;
   int curr_class_dmethod;
+  bool global_variable_flag;
+  bool member_variable_flag;
+  bool static_member_variable_flag;
 
 public:
   RUST() :
@@ -67,6 +71,7 @@ public:
     proxy_class_name(NULL),
     proxy_class_code(NULL),
     destructor_call(NULL),
+    variable_name(NULL),
     director_callback_typedefs(NULL),
     director_callbacks(NULL),
     director_connect_parms(NULL),
@@ -77,7 +82,10 @@ public:
     dmethods_table(NULL),
     n_dmethods(0),
     first_class_dmethod(0),
-    curr_class_dmethod(0) {
+    curr_class_dmethod(0),
+    global_variable_flag(false),
+    member_variable_flag(false),
+    static_member_variable_flag(false) {
     director_multiple_inheritance = 0;
     directorLanguage();
     allow_overloading();
@@ -195,10 +203,14 @@ public:
     Printf(f_runtime, "    memcpy(copy, s, len);\n");
     Printf(f_runtime, "  return copy;\n");
     Printf(f_runtime, "}\n\n");
+    Printf(f_runtime, "static SWIGRUST_THREAD_LOCAL char *SWIG_RustPendingExceptionType = 0;\n");
     Printf(f_runtime, "static SWIGRUST_THREAD_LOCAL char *SWIG_RustPendingException = 0;\n\n");
-    Printf(f_runtime, "static void SWIG_RustSetPendingException(const char *message) {\n");
+    Printf(f_runtime, "static void SWIG_RustSetPendingException(const char *kind, const char *message) {\n");
+    Printf(f_runtime, "  if (SWIG_RustPendingExceptionType)\n");
+    Printf(f_runtime, "    free(SWIG_RustPendingExceptionType);\n");
     Printf(f_runtime, "  if (SWIG_RustPendingException)\n");
     Printf(f_runtime, "    free(SWIG_RustPendingException);\n");
+    Printf(f_runtime, "  SWIG_RustPendingExceptionType = SWIG_RustStringCopy(kind ? kind : \"std::exception\");\n");
     Printf(f_runtime, "  SWIG_RustPendingException = SWIG_RustStringCopy(message ? message : \"C++ exception\");\n");
     Printf(f_runtime, "}\n\n");
 
@@ -232,6 +244,11 @@ public:
     Printf(f_wrappers, "  SWIG_RustPendingException = 0;\n");
     Printf(f_wrappers, "  return message;\n");
     Printf(f_wrappers, "}\n\n");
+    Printf(f_wrappers, "SWIGEXPORT char *Rust_take_exception_type(void) {\n");
+    Printf(f_wrappers, "  char *kind = SWIG_RustPendingExceptionType;\n");
+    Printf(f_wrappers, "  SWIG_RustPendingExceptionType = 0;\n");
+    Printf(f_wrappers, "  return kind;\n");
+    Printf(f_wrappers, "}\n\n");
 
     Swig_banner_target_lang(f_rust, "//");
     Printf(f_rust, "\n");
@@ -251,6 +268,8 @@ public:
     Printf(rust_extern_code, "  pub fn Rust_string_free_raw(s: *mut c_char);\n");
     Printf(rust_extern_code, "  #[link_name = \"Rust_take_exception\"]\n");
     Printf(rust_extern_code, "  pub fn Rust_take_exception_raw() -> *mut c_char;\n");
+    Printf(rust_extern_code, "  #[link_name = \"Rust_take_exception_type\"]\n");
+    Printf(rust_extern_code, "  pub fn Rust_take_exception_type_raw() -> *mut c_char;\n");
 
     Language::top(n);
 
@@ -272,14 +291,44 @@ public:
     Printf(f_rust, "extern \"C\" {\n");
     Dump(rust_extern_code, f_rust);
     Printf(f_rust, "}\n");
-    Printf(f_rust, "\nfn rust_check_exception() {\n");
+    Printf(f_rust, "\n#[derive(Clone, Debug, Eq, PartialEq)]\n");
+    Printf(f_rust, "pub struct RustException {\n");
+    Printf(f_rust, "  pub kind: String,\n");
+    Printf(f_rust, "  pub message: String,\n");
+    Printf(f_rust, "}\n\n");
+    Printf(f_rust, "impl std::fmt::Display for RustException {\n");
+    Printf(f_rust, "  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n");
+    Printf(f_rust, "    write!(f, \"{}: {}\", self.kind, self.message)\n");
+    Printf(f_rust, "  }\n");
+    Printf(f_rust, "}\n\n");
+    Printf(f_rust, "impl std::error::Error for RustException {}\n\n");
+    Printf(f_rust, "fn rust_take_exception() -> Option<RustException> {\n");
     Printf(f_rust, "  unsafe {\n");
+    Printf(f_rust, "    let kind = Rust_take_exception_type_raw();\n");
     Printf(f_rust, "    let message = Rust_take_exception_raw();\n");
-    Printf(f_rust, "    if !message.is_null() {\n");
+    Printf(f_rust, "    if kind.is_null() && message.is_null() {\n");
+    Printf(f_rust, "      return None;\n");
+    Printf(f_rust, "    }\n");
+    Printf(f_rust, "    let kind_text = if kind.is_null() {\n");
+    Printf(f_rust, "      \"std::exception\".to_string()\n");
+    Printf(f_rust, "    } else {\n");
+    Printf(f_rust, "      let text = std::ffi::CStr::from_ptr(kind).to_string_lossy().into_owned();\n");
+    Printf(f_rust, "      Rust_string_free_raw(kind);\n");
+    Printf(f_rust, "      text\n");
+    Printf(f_rust, "    };\n");
+    Printf(f_rust, "    let message_text = if message.is_null() {\n");
+    Printf(f_rust, "      \"C++ exception\".to_string()\n");
+    Printf(f_rust, "    } else {\n");
     Printf(f_rust, "      let text = std::ffi::CStr::from_ptr(message).to_string_lossy().into_owned();\n");
     Printf(f_rust, "      Rust_string_free_raw(message);\n");
-    Printf(f_rust, "      panic!(\"{}\", text);\n");
-    Printf(f_rust, "    }\n");
+    Printf(f_rust, "      text\n");
+    Printf(f_rust, "    };\n");
+    Printf(f_rust, "    Some(RustException { kind: kind_text, message: message_text })\n");
+    Printf(f_rust, "  }\n");
+    Printf(f_rust, "}\n\n");
+    Printf(f_rust, "fn rust_check_exception() {\n");
+    Printf(f_rust, "  if let Some(error) = rust_take_exception() {\n");
+    Printf(f_rust, "    panic!(\"{}\", error);\n");
     Printf(f_rust, "  }\n");
     Printf(f_rust, "}\n\n");
     Dump(rust_proxy_code, f_rust);
@@ -307,6 +356,7 @@ public:
     Delete(proxy_class_name);
     Delete(proxy_class_code);
     Delete(destructor_call);
+    Delete(variable_name);
     Delete(dmethods_seq);
     Delete(dmethods_table);
     f_init = NULL;
@@ -324,6 +374,7 @@ public:
     proxy_class_name = NULL;
     proxy_class_code = NULL;
     destructor_call = NULL;
+    variable_name = NULL;
     dmethods_seq = NULL;
     dmethods_table = NULL;
     return SWIG_OK;
@@ -350,7 +401,6 @@ public:
     Wrapper *f = NewWrapper();
     String *return_ctype = NewString("");
     String *return_imtype = NewString("");
-    String *return_rusttype = NewString("");
     String *cleanup = NewString("");
     String *outarg = NewString("");
 
@@ -373,15 +423,6 @@ public:
     } else {
       String *fallback = rustType(returntype);
       Printv(return_imtype, fallback, NIL);
-      Delete(fallback);
-    }
-
-    if ((tm = Swig_typemap_lookup("rusttype", n, "", 0))) {
-      String *rusttypeout = Getattr(n, "tmap:rusttype:out");
-      Printv(return_rusttype, rusttypeout ? rusttypeout : tm, NIL);
-    } else {
-      String *fallback = rustType(returntype);
-      Printv(return_rusttype, fallback, NIL);
       Delete(fallback);
     }
 
@@ -417,6 +458,7 @@ public:
       String *rust_param_type = Getattr(p, "tmap:rusttype");
       String *rust_arg = Getattr(p, "tmap:rustin") ? Copy(Getattr(p, "tmap:rustin")) : Copy(arg);
       String *pre = Getattr(p, "tmap:rustin:pre");
+      bool rust_param_type_owned = false;
 
       if (!c_param_type) {
         Swig_warning(WARN_TYPEMAP_UNDEF, input_file, line_number, "No ctype typemap defined for %s\n", SwigType_str(pt, 0));
@@ -431,11 +473,13 @@ public:
       }
       if (!rust_param_type) {
         rust_param_type = rustType(pt);
+        rust_param_type_owned = true;
       } else {
         String *rusttypeout = Getattr(p, "tmap:rusttype:out");
         if (rusttypeout)
           rust_param_type = rusttypeout;
       }
+      applyRustProxyInput(pt, arg, &rust_param_type, &rust_arg, &rust_param_type_owned);
 
       Replaceall(rust_arg, "$rustinput", arg);
       Replaceall(rust_arg, "$iminput", arg);
@@ -464,6 +508,8 @@ public:
         p = nextSibling(p);
       }
 
+      if (rust_param_type_owned)
+        Delete(rust_param_type);
       Delete(rust_arg);
       Delete(c_arg_name);
       Delete(arg);
@@ -512,7 +558,8 @@ public:
     Printf(f->code, "}\n");
 
     Wrapper_print(f, f_wrappers);
-    writeRustFunction(n, overloaded_name, wname, return_imtype, return_rusttype, rust_im_params, rust_params, rust_pre_code, rust_args);
+    writeRustFunction(n, overloaded_name, wname, return_imtype, rust_im_params, rust_params, rust_pre_code, rust_args);
+    emitRustVariableAccessor(n, overloaded_name);
 
     Delete(outarg);
     Delete(cleanup);
@@ -520,7 +567,6 @@ public:
     Delete(rust_params);
     Delete(rust_im_params);
     Delete(rust_args);
-    Delete(return_rusttype);
     Delete(return_imtype);
     Delete(return_ctype);
     Delete(wname);
@@ -545,9 +591,24 @@ public:
       value = Getattr(n, "staticmembervariableHandler:value");
 
     if (value && rustTypeIsPrimitive(type)) {
-      String *rust_name = rustIdentifier(symname);
-      Printf(f_rust, "pub const %s: %s = %s;\n", rust_name, rust_type, value);
-      Delete(rust_name);
+      if (Getattr(n, "wrappedasconstant") && Getattr(n, "staticmembervariableHandler:value") && proxy_class_code && proxy_class_name) {
+        String *prefix = NewStringf("%s_", proxy_class_name);
+        String *member_name = Copy(symname);
+        if (Strncmp(member_name, prefix, Len(prefix)) == 0) {
+          String *stripped = NewString(Char(member_name) + Len(prefix));
+          Delete(member_name);
+          member_name = stripped;
+        }
+        String *rust_name = rustAssociatedConstantName(member_name);
+        Printf(proxy_class_code, "  pub const %s: %s = %s;\n", rust_name, rust_type, value);
+        Delete(rust_name);
+        Delete(member_name);
+        Delete(prefix);
+      } else {
+        String *rust_name = rustIdentifier(symname);
+        Printf(f_rust, "pub const %s: %s = %s;\n", rust_name, rust_type, value);
+        Delete(rust_name);
+      }
     } else {
       Swig_warning(WARN_LANG_NATIVE_UNIMPL, input_file, line_number, "Rust constant '%s' has unsupported type %s\n", symname, SwigType_str(type, 0));
     }
@@ -558,6 +619,33 @@ public:
 
   virtual int variableWrapper(Node *n) {
     return Language::variableWrapper(n);
+  }
+
+  virtual int globalvariableHandler(Node *n) {
+    Delete(variable_name);
+    variable_name = Copy(Getattr(n, "sym:name"));
+    global_variable_flag = true;
+    int result = Language::globalvariableHandler(n);
+    global_variable_flag = false;
+    return result;
+  }
+
+  virtual int membervariableHandler(Node *n) {
+    Delete(variable_name);
+    variable_name = Copy(Getattr(n, "sym:name"));
+    member_variable_flag = true;
+    int result = Language::membervariableHandler(n);
+    member_variable_flag = false;
+    return result;
+  }
+
+  virtual int staticmembervariableHandler(Node *n) {
+    Delete(variable_name);
+    variable_name = Copy(Getattr(n, "sym:name"));
+    static_member_variable_flag = true;
+    int result = Language::staticmembervariableHandler(n);
+    static_member_variable_flag = false;
+    return result;
   }
 
   virtual int classHandler(Node *n) {
@@ -640,18 +728,21 @@ public:
   virtual int memberfunctionHandler(Node *n) {
     Language::memberfunctionHandler(n);
     emitProxyFunction(n, false);
+    emitProxyFunction(n, false, true);
     return SWIG_OK;
   }
 
   virtual int staticmemberfunctionHandler(Node *n) {
     Language::staticmemberfunctionHandler(n);
     emitProxyFunction(n, true);
+    emitProxyFunction(n, true, true);
     return SWIG_OK;
   }
 
   virtual int constructorHandler(Node *n) {
     Language::constructorHandler(n);
     emitProxyConstructor(n);
+    emitProxyConstructor(n, true);
     return SWIG_OK;
   }
 
@@ -660,7 +751,7 @@ public:
     String *symname = Getattr(n, "sym:name");
     if (proxy_class_name && destructor_call) {
       Clear(destructor_call);
-      Printf(destructor_call, "%s(self.ptr)", Swig_name_destroy(getNSpace(), symname));
+      Printf(destructor_call, "%s_raw(self.ptr)", Swig_name_destroy(getNSpace(), symname));
     }
     return SWIG_OK;
   }
@@ -1390,11 +1481,13 @@ public:
   }
 
 private:
-  void buildRustProxyParameters(Node *n, ParmList *parms, String *rust_params, String *rust_pre_code, String *rust_args) {
+  void buildRustProxyParameters(Node *n, ParmList *parms, String *rust_params, String *rust_pre_code, String *rust_args, int skip_inputs = 0,
+                                bool variable_setter = false) {
     Swig_typemap_attach_parms("rusttype", parms, 0);
     Swig_typemap_attach_parms("rustin", parms, 0);
     int gencomma = 0;
     int index = 0;
+    int skipped = 0;
     for (Parm *p = parms; p; p = nextSibling(p), index++) {
       if (checkAttribute(p, "varargs:ignore", "1"))
         continue;
@@ -1404,16 +1497,24 @@ private:
       SwigType *pt = Getattr(p, "type");
       if (SwigType_type(pt) == T_VOID)
         continue;
+      if (skipped < skip_inputs) {
+        skipped++;
+        continue;
+      }
 
-      String *arg = makeParameterName(n, p, index, false);
+      String *arg = variable_setter && !gencomma ? NewString("value") : makeParameterName(n, p, index, false);
       String *rust_type = Getattr(p, "tmap:rusttype");
       String *rust_arg = Getattr(p, "tmap:rustin") ? Copy(Getattr(p, "tmap:rustin")) : Copy(arg);
       String *pre = Getattr(p, "tmap:rustin:pre");
+      bool rust_type_owned = false;
 
-      if (!rust_type)
+      if (!rust_type) {
         rust_type = rustType(pt);
-      else if (Getattr(p, "tmap:rusttype:out"))
+        rust_type_owned = true;
+      } else if (Getattr(p, "tmap:rusttype:out")) {
         rust_type = Getattr(p, "tmap:rusttype:out");
+      }
+      applyRustProxyInput(pt, arg, &rust_type, &rust_arg, &rust_type_owned);
 
       Replaceall(rust_arg, "$rustinput", arg);
       Replaceall(rust_arg, "$iminput", arg);
@@ -1429,7 +1530,7 @@ private:
       Printv(rust_args, gencomma ? ", " : "", rust_arg, NIL);
       gencomma = 1;
 
-      if (!Getattr(p, "tmap:rusttype"))
+      if (rust_type_owned)
         Delete(rust_type);
       Delete(rust_arg);
       Delete(arg);
@@ -1460,7 +1561,7 @@ private:
            (rust_return && (Strstr(rust_return, "*mut ") || Strstr(rust_return, "*const ")));
   }
 
-  void emitProxyFunction(Node *n, bool is_static) {
+  void emitProxyFunction(Node *n, bool is_static, bool result_mode = false) {
     if (!proxy_class_code || Getattr(n, "overload:ignore") || GetFlag(n, "explicitcall"))
       return;
 
@@ -1479,7 +1580,8 @@ private:
     buildRustProxyParameters(n, parms, rust_params, rust_pre_code, rust_args);
 
     bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, rust_return);
-    Printf(proxy_class_code, "  pub %sfn %s(", needs_unsafe ? "unsafe " : "", method_name);
+    String *public_method_name = result_mode ? rustTryIdentifier(method_name) : Copy(method_name);
+    Printf(proxy_class_code, "  pub %sfn %s(", needs_unsafe ? "unsafe " : "", public_method_name);
     if (!is_static)
       Printf(proxy_class_code, "&self");
     if (Len(rust_params)) {
@@ -1488,13 +1590,18 @@ private:
       Printv(proxy_class_code, rust_params, NIL);
     }
     Printf(proxy_class_code, ")");
-    if (Cmp(rust_return, "()") != 0)
+    if (result_mode) {
+      String *result_type = rustResultType(rust_return);
+      Printf(proxy_class_code, " -> %s", result_type);
+      Delete(result_type);
+    } else if (Cmp(rust_return, "()") != 0) {
       Printf(proxy_class_code, " -> %s", rust_return);
+    }
     Printf(proxy_class_code, " {\n");
     if (!needs_unsafe)
       Printf(proxy_class_code, "    unsafe {\n");
     Printv(proxy_class_code, rust_pre_code, NIL);
-    Printf(rust_call, "%s(", wrapper_name);
+    Printf(rust_call, "%s_raw(", wrapper_name);
     if (!is_static)
       Printf(rust_call, "self.as_ptr()");
     if (Len(rust_args)) {
@@ -1503,7 +1610,7 @@ private:
       Printv(rust_call, rust_args, NIL);
     }
     Printf(rust_call, ")");
-    rust_body = rustOutCode(n, rust_call, needs_unsafe ? "    " : "      ");
+    rust_body = rustOutCode(n, rust_call, needs_unsafe ? "    " : "      ", result_mode);
     Printv(proxy_class_code, rust_body, NIL);
     if (!needs_unsafe)
       Printf(proxy_class_code, "    }\n");
@@ -1515,12 +1622,13 @@ private:
     Delete(rust_pre_code);
     Delete(rust_params);
     Delete(rust_return);
+    Delete(public_method_name);
     Delete(method_name);
     Delete(wrapper_name);
     Delete(overloaded_name);
   }
 
-  void emitProxyConstructor(Node *n) {
+  void emitProxyConstructor(Node *n, bool result_mode = false) {
     if (!proxy_class_code || Getattr(n, "overload:ignore"))
       return;
 
@@ -1535,13 +1643,22 @@ private:
     buildRustProxyParameters(n, parms, rust_params, rust_pre_code, rust_args);
 
     bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, 0);
-    Printf(proxy_class_code, "  pub %sfn %s(%s) -> Self {\n", needs_unsafe ? "unsafe " : "", constructor_name, rust_params);
+    const char *rust_return = result_mode ? "Result<Self, RustException>" : "Self";
+    Printf(
+      proxy_class_code, "  pub %sfn %s%s(%s) -> %s {\n", needs_unsafe ? "unsafe " : "", result_mode ? "try_" : "", constructor_name, rust_params, rust_return);
     if (!needs_unsafe)
       Printf(proxy_class_code, "    unsafe {\n");
     Printv(proxy_class_code, rust_pre_code, NIL);
-    Printf(proxy_class_code, "%slet swig_result = %s(%s);\n", needs_unsafe ? "    " : "      ", wrapper_name, rust_args);
-    Printf(proxy_class_code, "%srust_check_exception();\n", needs_unsafe ? "    " : "      ");
-    Printf(proxy_class_code, "%sSelf::from_raw_owned(swig_result, true)\n", needs_unsafe ? "    " : "      ");
+    Printf(proxy_class_code, "%slet swig_result = %s_raw(%s);\n", needs_unsafe ? "    " : "      ", wrapper_name, rust_args);
+    if (result_mode) {
+      Printf(proxy_class_code, "%sif let Some(error) = rust_take_exception() {\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%s  return Err(error);\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%s}\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%sOk(Self::from_raw_owned(swig_result, true))\n", needs_unsafe ? "    " : "      ");
+    } else {
+      Printf(proxy_class_code, "%srust_check_exception();\n", needs_unsafe ? "    " : "      ");
+      Printf(proxy_class_code, "%sSelf::from_raw_owned(swig_result, true)\n", needs_unsafe ? "    " : "      ");
+    }
     if (!needs_unsafe)
       Printf(proxy_class_code, "    }\n");
     Printf(proxy_class_code, "  }\n");
@@ -1552,6 +1669,97 @@ private:
     Delete(constructor_name);
     Delete(wrapper_name);
     Delete(overloaded_name);
+  }
+
+  String *rustSetterName(String *name) {
+    String *setter = NewStringf("set_%s", name);
+    String *rust_name = rustIdentifier(setter);
+    Delete(setter);
+    return rust_name;
+  }
+
+  String *rustGetterName(String *name) {
+    String *getter = NewStringf("get_%s", name);
+    String *rust_name = rustIdentifier(getter);
+    Delete(getter);
+    return rust_name;
+  }
+
+  void emitRustVariableAccessor(Node *n, String *wrapper_name) {
+    if (!variable_name || (!global_variable_flag && !member_variable_flag && !static_member_variable_flag))
+      return;
+
+    const bool setter = Getattr(n, "varset") || Getattr(n, "memberset");
+    const bool getter = Getattr(n, "varget") || Getattr(n, "memberget");
+    if (!setter && !getter)
+      return;
+
+    String *rust_name = NULL;
+    if (setter)
+      rust_name = rustSetterName(variable_name);
+    else if (global_variable_flag)
+      rust_name = rustGetterName(variable_name);
+    else
+      rust_name = rustIdentifier(variable_name);
+    String *rust_return = rustReturnType(n, Getattr(n, "type"));
+    String *rust_params = NewString("");
+    String *rust_pre_code = NewString("");
+    String *rust_args = NewString("");
+    String *raw_args = NewString("");
+    String *call = NewString("");
+    String *target = (member_variable_flag || static_member_variable_flag) && proxy_class_code ? proxy_class_code : rust_proxy_code;
+
+    if (setter)
+      buildRustProxyParameters(n, Getattr(n, "parms"), rust_params, rust_pre_code, rust_args, member_variable_flag ? 1 : 0, true);
+
+    if (member_variable_flag) {
+      Printf(raw_args, "self.as_ptr()");
+      if (Len(rust_args))
+        Printf(raw_args, ", %s", rust_args);
+    } else {
+      Printv(raw_args, rust_args, NIL);
+    }
+
+    Printf(call, "%s_raw(%s)", wrapper_name, raw_args);
+
+    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, rust_return);
+    if (target == proxy_class_code) {
+      Printf(target, "  pub %sfn %s(", needs_unsafe ? "unsafe " : "", rust_name);
+      if (member_variable_flag)
+        Printf(target, "&self");
+      if (Len(rust_params)) {
+        if (member_variable_flag)
+          Printf(target, ", ");
+        Printv(target, rust_params, NIL);
+      }
+      Printf(target, ")");
+    } else {
+      Printf(target, "pub %sfn %s(", needs_unsafe ? "unsafe " : "", rust_name);
+      Printv(target, rust_params, NIL);
+      Printf(target, ")");
+    }
+    if (Cmp(rust_return, "()") != 0)
+      Printf(target, " -> %s", rust_return);
+    Printf(target, " {\n");
+    if (!needs_unsafe)
+      Printf(target, "%sunsafe {\n", target == proxy_class_code ? "    " : "  ");
+    Printv(target, rust_pre_code, NIL);
+    String *body = rustOutCode(n, call, needs_unsafe ? (target == proxy_class_code ? "    " : "  ") : (target == proxy_class_code ? "      " : "    "));
+    Printv(target, body, NIL);
+    if (!needs_unsafe)
+      Printf(target, "%s}\n", target == proxy_class_code ? "    " : "  ");
+    Printf(target, "%s}\n", target == proxy_class_code ? "  " : "");
+    if (target == rust_proxy_code)
+      Printf(target, "\n");
+
+    Delete(body);
+    Delete(call);
+    Delete(raw_args);
+    Delete(rust_args);
+    Delete(rust_pre_code);
+    Delete(rust_params);
+    Delete(rust_return);
+    Delete(rust_name);
   }
 
   String *getOverloadedName(Node *n) const {
@@ -1693,7 +1901,7 @@ private:
     Printf(rust_extern_code, "  pub fn %s_raw(obj: *mut c_void);\n", swig_director_disconnect);
 
     Printf(rust_proxy_code, "impl %s {\n", sym_name);
-    Printf(rust_proxy_code, "  pub unsafe fn connect_director(&self, rustobj: *mut c_void");
+    Printf(rust_proxy_code, "  unsafe fn connect_director(&self, rustobj: *mut c_void");
     if (Len(rust_connect_params))
       Printf(rust_proxy_code, ", %s", rust_connect_params);
     Printf(rust_proxy_code, ") {\n");
@@ -1702,36 +1910,67 @@ private:
       Printf(rust_proxy_code, ", %s", rust_connect_args);
     Printf(rust_proxy_code, ");\n");
     Printf(rust_proxy_code, "  }\n");
-    Printf(rust_proxy_code, "  pub unsafe fn connect_director_trait<T: %sDirector>(&self, director: &mut T) {\n", sym_name);
+    Printf(rust_proxy_code, "  unsafe fn connect_director_trait<T: %sDirector>(&self, director: &mut T) {\n", sym_name);
     Printf(rust_proxy_code, "    self.connect_director(director as *mut T as *mut c_void");
     if (Len(rust_trait_args))
       Printf(rust_proxy_code, ", %s", rust_trait_args);
     Printf(rust_proxy_code, ");\n");
     Printf(rust_proxy_code, "  }\n");
-    Printf(rust_proxy_code, "  pub unsafe fn disconnect_director(&self) {\n");
+    Printf(rust_proxy_code, "  fn disconnect_director(&self) {\n");
+    Printf(rust_proxy_code, "    unsafe {\n");
     Printf(rust_proxy_code, "    %s_raw(self.as_ptr());\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "    }\n");
     Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n\n");
     Printf(rust_proxy_code, "pub struct %sDirectorHandle<T: %sDirector> {\n", sym_name, sym_name);
     Printf(rust_proxy_code, "  object: *mut c_void,\n");
-    Printf(rust_proxy_code, "  director: Box<T>,\n");
+    Printf(rust_proxy_code, "  director: Option<Box<T>>,\n");
+    Printf(rust_proxy_code, "  connected: bool,\n");
     Printf(rust_proxy_code, "}\n");
     Printf(rust_proxy_code, "impl<T: %sDirector> %sDirectorHandle<T> {\n", sym_name, sym_name);
-    Printf(rust_proxy_code, "  pub unsafe fn connect(object: &%s, director: T) -> Self {\n", sym_name);
-    Printf(rust_proxy_code, "    let mut handle = Self { object: object.as_ptr(), director: Box::new(director) };\n");
-    Printf(rust_proxy_code, "    object.connect_director_trait(&mut *handle.director);\n");
+    Printf(rust_proxy_code, "  pub fn connect(object: &%s, director: T) -> Self {\n", sym_name);
+    Printf(rust_proxy_code, "    let mut handle = Self { object: object.as_ptr(), director: Some(Box::new(director)), connected: false };\n");
+    Printf(rust_proxy_code, "    unsafe {\n");
+    Printf(rust_proxy_code, "      object.connect_director_trait(&mut **handle.director.as_mut().expect(\"director handle has no director\"));\n");
+    Printf(rust_proxy_code, "    }\n");
+    Printf(rust_proxy_code, "    handle.connected = true;\n");
     Printf(rust_proxy_code, "    handle\n");
     Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub fn is_connected(&self) -> bool {\n");
+    Printf(rust_proxy_code, "    self.connected\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub fn disconnect(&mut self) {\n");
+    Printf(rust_proxy_code, "    if self.connected && !self.object.is_null() {\n");
+    Printf(rust_proxy_code, "      unsafe { %s_raw(self.object); }\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "      self.connected = false;\n");
+    Printf(rust_proxy_code, "    }\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub fn into_director(mut self) -> T {\n");
+    Printf(rust_proxy_code, "    self.disconnect();\n");
+    Printf(rust_proxy_code, "    let director = *self.director.take().expect(\"director handle has no director\");\n");
+    Printf(rust_proxy_code, "    std::mem::forget(self);\n");
+    Printf(rust_proxy_code, "    director\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub unsafe fn disown(mut self) -> *mut T {\n");
+    Printf(rust_proxy_code, "    self.connected = false;\n");
+    Printf(rust_proxy_code, "    let director = Box::into_raw(self.director.take().expect(\"director handle has no director\"));\n");
+    Printf(rust_proxy_code, "    std::mem::forget(self);\n");
+    Printf(rust_proxy_code, "    director\n");
+    Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "  pub unsafe fn reclaim_disowned(object: &%s, director: *mut T) -> T {\n", sym_name);
+    Printf(rust_proxy_code, "    %s_raw(object.as_ptr());\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "    *Box::from_raw(director)\n");
+    Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "  pub fn director(&self) -> &T {\n");
-    Printf(rust_proxy_code, "    &self.director\n");
+    Printf(rust_proxy_code, "    self.director.as_ref().expect(\"director handle has no director\")\n");
     Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "  pub fn director_mut(&mut self) -> &mut T {\n");
-    Printf(rust_proxy_code, "    &mut self.director\n");
+    Printf(rust_proxy_code, "    self.director.as_mut().expect(\"director handle has no director\")\n");
     Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n");
     Printf(rust_proxy_code, "impl<T: %sDirector> Drop for %sDirectorHandle<T> {\n", sym_name, sym_name);
     Printf(rust_proxy_code, "  fn drop(&mut self) {\n");
-    Printf(rust_proxy_code, "    unsafe { %s_raw(self.object); }\n", swig_director_disconnect);
+    Printf(rust_proxy_code, "    self.disconnect();\n");
     Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n\n");
 
@@ -1755,15 +1994,44 @@ private:
     String *tm = Swig_typemap_lookup("rusttype", n, "", 0);
     if (tm) {
       String *rusttypeout = Getattr(n, "tmap:rusttype:out");
-      return Copy(rusttypeout ? rusttypeout : tm);
+      String *rust_return = Copy(rusttypeout ? rusttypeout : tm);
+      String *proxy_return = rustProxyReturnType(returntype);
+      if (proxy_return && rustTypeIsVoidPointer(rust_return)) {
+        Delete(rust_return);
+        rust_return = proxy_return;
+      } else {
+        Delete(proxy_return);
+      }
+      return rust_return;
     }
+    String *proxy_return = rustProxyReturnType(returntype);
+    if (proxy_return)
+      return proxy_return;
     return rustType(returntype);
   }
 
-  String *rustOutCode(Node *n, String *imcall, const_String_or_char_ptr indent) {
+  String *rustResultType(String *rust_return) const {
+    if (Cmp(rust_return, "()") == 0)
+      return NewString("Result<(), RustException>");
+    return NewStringf("Result<%s, RustException>", rust_return);
+  }
+
+  void rustEmitResultExceptionCheck(String *body, const_String_or_char_ptr indent) {
+    Printf(body, "%sif let Some(error) = rust_take_exception() {\n", indent);
+    Printf(body, "%s  return Err(error);\n", indent);
+    Printf(body, "%s}\n", indent);
+  }
+
+  String *rustOutCode(Node *n, String *imcall, const_String_or_char_ptr indent, bool result_mode = false) {
     SwigType *returntype = Getattr(n, "type");
     String *rust_return = rustReturnType(n, returntype);
     String *body = NewString("");
+
+    String *proxy_body = rustProxyOutCode(n, returntype, imcall, indent, result_mode);
+    if (proxy_body) {
+      Delete(rust_return);
+      return proxy_body;
+    }
 
     String *tm = Swig_typemap_lookup("rustout", n, "", 0);
     if (tm) {
@@ -1772,8 +2040,15 @@ private:
       Replaceall(converted, "$rustcall", "swig_result");
       Replaceall(converted, "\n", NewStringf("\n%s", indent));
       Printf(body, "%slet swig_result = %s;\n", indent, imcall);
-      Printf(body, "%srust_check_exception();\n", indent);
-      Printv(body, indent, converted, "\n", NIL);
+      if (result_mode) {
+        rustEmitResultExceptionCheck(body, indent);
+        Printf(body, "%sOk({\n", indent);
+        Printv(body, indent, "  ", converted, "\n", NIL);
+        Printf(body, "%s})\n", indent);
+      } else {
+        Printf(body, "%srust_check_exception();\n", indent);
+        Printv(body, indent, converted, "\n", NIL);
+      }
       Delete(converted);
       Delete(rust_return);
       return body;
@@ -1781,19 +2056,152 @@ private:
 
     if (Cmp(rust_return, "()") != 0) {
       Printf(body, "%slet swig_result = %s;\n", indent, imcall);
-      Printf(body, "%srust_check_exception();\n", indent);
-      Printf(body, "%sswig_result\n", indent);
+      if (result_mode) {
+        rustEmitResultExceptionCheck(body, indent);
+        Printf(body, "%sOk(swig_result)\n", indent);
+      } else {
+        Printf(body, "%srust_check_exception();\n", indent);
+        Printf(body, "%sswig_result\n", indent);
+      }
     } else {
       Printf(body, "%s%s;\n", indent, imcall);
-      Printf(body, "%srust_check_exception();\n", indent);
+      if (result_mode) {
+        rustEmitResultExceptionCheck(body, indent);
+        Printf(body, "%sOk(())\n", indent);
+      } else {
+        Printf(body, "%srust_check_exception();\n", indent);
+      }
     }
     Delete(rust_return);
     return body;
   }
 
-  void writeRustFunction(Node *n, String *rust_name, String *c_name, String *raw_return, String *rust_return, String *rust_im_params, String *rust_params,
-                         String *rust_pre_code, String *rust_args) {
+  bool rustTypeIsVoidPointer(String *rust_type) const {
+    return Cmp(rust_type, "*mut c_void") == 0 || Cmp(rust_type, "*const c_void") == 0;
+  }
+
+  String *rustProxyNameForType(SwigType *t, bool *is_pointer, bool *is_reference) {
+    *is_pointer = false;
+    *is_reference = false;
+
+    SwigType *resolved = SwigType_typedef_resolve_all(t);
+    SwigType *stripped = SwigType_strip_qualifiers(resolved);
+    SwigType *proxy_type = NULL;
+
+    if (SwigType_ispointer(stripped)) {
+      SwigType *base = SwigType_base(stripped);
+      SwigType *base_stripped = SwigType_strip_qualifiers(base);
+      if (!SwigType_ispointer(base_stripped) && !SwigType_isarray(base_stripped) && !SwigType_isreference(base_stripped)) {
+        proxy_type = Copy(base_stripped);
+        *is_pointer = true;
+      }
+      Delete(base_stripped);
+      Delete(base);
+    } else if (SwigType_isreference(stripped)) {
+      SwigType *base = SwigType_base(stripped);
+      SwigType *base_stripped = SwigType_strip_qualifiers(base);
+      if (!SwigType_ispointer(base_stripped) && !SwigType_isarray(base_stripped) && !SwigType_isreference(base_stripped)) {
+        proxy_type = Copy(base_stripped);
+        *is_reference = true;
+      }
+      Delete(base_stripped);
+      Delete(base);
+    } else if (!SwigType_isarray(stripped)) {
+      proxy_type = Copy(stripped);
+    }
+
+    String *proxy_name = NULL;
+    if (proxy_type) {
+      Node *proxy_class = classLookup(proxy_type);
+      if (proxy_class)
+        proxy_name = Copy(Getattr(proxy_class, "sym:name"));
+      Delete(proxy_type);
+    }
+
+    Delete(stripped);
+    Delete(resolved);
+    return proxy_name;
+  }
+
+  void applyRustProxyInput(SwigType *pt, String *arg, String **rust_type, String **rust_arg, bool *rust_type_owned) {
+    if (!rustTypeIsVoidPointer(*rust_type))
+      return;
+
+    bool is_pointer = false;
+    bool is_reference = false;
+    String *proxy_name = rustProxyNameForType(pt, &is_pointer, &is_reference);
+    if (!proxy_name)
+      return;
+
+    if (is_pointer || is_reference) {
+      if (*rust_type_owned)
+        Delete(*rust_type);
+      Delete(*rust_arg);
+      *rust_type = NewStringf("&%s", proxy_name);
+      *rust_arg = NewStringf("%s.as_ptr()", arg);
+      *rust_type_owned = true;
+    }
+    Delete(proxy_name);
+  }
+
+  String *rustProxyReturnType(SwigType *returntype) {
+    bool is_pointer = false;
+    bool is_reference = false;
+    String *proxy_name = rustProxyNameForType(returntype, &is_pointer, &is_reference);
+    if (!proxy_name)
+      return NULL;
+
+    String *rust_return = NULL;
+    if (is_pointer)
+      rust_return = NewStringf("Option<%s>", proxy_name);
+    else if (is_reference)
+      rust_return = Copy(proxy_name);
+    else
+      rust_return = Copy(proxy_name);
+
+    Delete(proxy_name);
+    return rust_return;
+  }
+
+  String *rustProxyOutCode(Node *n, SwigType *returntype, String *imcall, const_String_or_char_ptr indent, bool result_mode = false) {
+    bool is_pointer = false;
+    bool is_reference = false;
+    String *proxy_name = rustProxyNameForType(returntype, &is_pointer, &is_reference);
+    if (!proxy_name)
+      return NULL;
+
+    String *body = NewString("");
+    Printf(body, "%slet swig_result = %s;\n", indent, imcall);
+    if (result_mode)
+      rustEmitResultExceptionCheck(body, indent);
+    else
+      Printf(body, "%srust_check_exception();\n", indent);
+    if (result_mode)
+      Printf(body, "%sOk(", indent);
+    if (is_pointer) {
+      Printf(body, "%sif swig_result.is_null() {\n", result_mode ? "" : indent);
+      Printf(body, "%s  None\n", indent);
+      Printf(body, "%s} else {\n", indent);
+      Printf(body, "%s  Some(%s::from_raw_owned(swig_result, %s))\n", indent, proxy_name, GetFlag(n, "feature:new") ? "true" : "false");
+      Printf(body, "%s}", indent);
+    } else if (is_reference) {
+      Printf(body, "%s%s::from_raw_owned(swig_result, false)", result_mode ? "" : indent, proxy_name);
+    } else {
+      Printf(body, "%s%s::from_raw_owned(swig_result, true)", result_mode ? "" : indent, proxy_name);
+    }
+    if (result_mode)
+      Printf(body, ")\n");
+    else
+      Printf(body, "\n");
+
+    Delete(proxy_name);
+    return body;
+  }
+
+  void writeRustFunction(Node *n, String *rust_name, String *c_name, String *raw_return, String *rust_im_params, String *rust_params, String *rust_pre_code,
+                         String *rust_args) {
     String *public_rust_name = rustIdentifier(rust_name);
+    String *public_rust_return = rustReturnType(n, Getattr(n, "type"));
 
     Printf(rust_extern_code, "  #[link_name = \"%s\"]\n", c_name);
     Printf(rust_extern_code, "  pub fn %s_raw(%s)", rust_name, rust_im_params);
@@ -1801,10 +2209,10 @@ private:
       Printf(rust_extern_code, " -> %s", raw_return);
     Printf(rust_extern_code, ";\n");
 
-    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, rust_return);
+    bool needs_unsafe = rustSignatureNeedsUnsafe(rust_params, public_rust_return);
     Printf(rust_proxy_code, "pub %sfn %s(%s)", needs_unsafe ? "unsafe " : "", public_rust_name, rust_params);
-    if (Cmp(rust_return, "()") != 0)
-      Printf(rust_proxy_code, " -> %s", rust_return);
+    if (Cmp(public_rust_return, "()") != 0)
+      Printf(rust_proxy_code, " -> %s", public_rust_return);
     Printf(rust_proxy_code, " {\n");
     if (!needs_unsafe)
       Printf(rust_proxy_code, "  unsafe {\n");
@@ -1816,7 +2224,23 @@ private:
       Printf(rust_proxy_code, "  }\n");
     Printf(rust_proxy_code, "}\n\n");
     Delete(body);
+
+    String *result_type = rustResultType(public_rust_return);
+    String *try_public_rust_name = rustTryIdentifier(public_rust_name);
+    Printf(rust_proxy_code, "pub %sfn %s(%s) -> %s {\n", needs_unsafe ? "unsafe " : "", try_public_rust_name, rust_params, result_type);
+    if (!needs_unsafe)
+      Printf(rust_proxy_code, "  unsafe {\n");
+    Printv(rust_proxy_code, rust_pre_code, NIL);
+    body = rustOutCode(n, imcall, needs_unsafe ? "  " : "    ", true);
+    Printv(rust_proxy_code, body, NIL);
+    if (!needs_unsafe)
+      Printf(rust_proxy_code, "  }\n");
+    Printf(rust_proxy_code, "}\n\n");
+    Delete(body);
+    Delete(result_type);
+    Delete(try_public_rust_name);
     Delete(imcall);
+    Delete(public_rust_return);
     Delete(public_rust_name);
   }
 
@@ -1839,6 +2263,26 @@ private:
     if (isRustKeyword(name))
       return NewStringf("r#%s", name);
     return Copy(name);
+  }
+
+  String *rustAssociatedConstantName(const String *name) const {
+    String *rust_name = rustIdentifier(name);
+    String *constant_name = NewString("");
+    const char *value = Char(rust_name);
+    for (const char *c = value; c && *c; ++c) {
+      char ch = *c;
+      if (ch >= 'a' && ch <= 'z')
+        ch = ch - 'a' + 'A';
+      Printf(constant_name, "%c", ch);
+    }
+    Delete(rust_name);
+    return constant_name;
+  }
+
+  String *rustTryIdentifier(const String *name) const {
+    if (Strncmp(name, "r#", 2) == 0)
+      return NewStringf("r#try_%s", Char(name) + 2);
+    return NewStringf("try_%s", name);
   }
 
   bool rustTypeIsPrimitive(SwigType *t) {

@@ -9,9 +9,7 @@ fn main() {
     if values.size() != 3 {
         panic!("expected size 3, got {}", values.size());
     }
-    unsafe {
-        if rust_std_vector::vector_sum(values.as_ptr()) != 42 {
-            panic!("expected vector sum 42");
-        }
+    if rust_std_vector::vector_sum(&values) != 42 {
+        panic!("expected vector sum 42");
     }
 }

@@ -45,6 +45,25 @@ Version 4.5.0 (in progress)
             generated as safe Rust functions when their public Rust signature
             does not expose raw pointers. Raw pointer APIs, manual ownership
             entry points and director connection hooks remain unsafe.
+            Rust now maps wrapped class pointer and reference parameters in
+            the public Rust layer to borrowed proxy references such as &T,
+            returns wrapped class pointers as Option<T>, and returns wrapped
+            class values/references as proxy objects while keeping the raw C
+            ABI declarations internal to the generated module.
+            Rust exception handling now generates a structured RustException
+            containing the C++ exception kind and message, together with try_
+            function and method wrappers that return Result<T, RustException>.
+            The original panic-on-exception wrappers remain available for
+            compatibility.
+            Rust now generates idiomatic accessors for wrapped global
+            variables, class member variables and static member variables.
+            Class static constants are exposed as associated Rust constants on
+            the proxy type.
+            Rust director handles now provide a safe connect API, explicit
+            disconnect, connected-state inspection and callback state recovery.
+            The low-level raw director connect path is kept inside the
+            generated module, while unsafe disown/reclaim helpers cover
+            intentional manual lifetime management.
 
 2026-06-17: olly
 	    #3480 [Octave, Python, Ruby] Improve handling of NULL vs nullptr vs
