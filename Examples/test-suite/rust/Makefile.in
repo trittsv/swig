@@ -153,5 +153,5 @@ run_testcase = \
 	  rm -rf $*; \
 	fi
 
-clean: $(ALL_CLEAN)
+clean: $(ALL_CLEAN) $(RUST_CPP11_PRE_CPP17_TEST_CASES:=.clean)
 	@rm -f *_runme
